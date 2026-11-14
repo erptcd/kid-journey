@@ -84,6 +84,13 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 .tiles{display:flex;flex-wrap:wrap;gap:7px;max-width:320px;justify-content:center}
 .tile{width:48px;height:52px;border-radius:14px;background:#fff6d6;font-size:29px;font-weight:800;box-shadow:0 4px 0 #f0d27a}.tile:disabled{opacity:.25}
 .tactions{display:flex;gap:8px}.tactions .k{width:92px}
+.pad4{grid-template-columns:repeat(4,58px)}.k.wide{grid-column:span 2}.k.op{background:#eaf1ff;color:#1d4ed8;box-shadow:0 4px 0 #b9cdf5}
+.expr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:60px}
+.exl{font-weight:800;font-size:18px;color:#6b7891;margin-right:4px}
+.tok.n{min-width:62px;height:56px;border-radius:14px;background:#fff;box-shadow:0 0 0 3px #cfd9ea inset;display:inline-grid;place-items:center;padding:0 10px;color:var(--blue);font-size:34px;font-weight:800}
+.tok.n.cur{box-shadow:0 0 0 3px var(--pri) inset}.tok.n.blink::after{content:'';width:3px;height:30px;background:var(--pri);animation:bl 1s steps(1) infinite}
+.tok.o{font-size:36px;font-weight:800;color:var(--ink);padding:0 2px}
+.exh{color:#6b7891;font-size:15px}
 .mic{width:104px;height:104px;border-radius:50%;background:linear-gradient(180deg,#ff8a5c,#ff5d3a);font-size:50px;box-shadow:0 6px 0 #d4461c}
 .mic.on{animation:pulse 1s infinite}@keyframes pulse{50%{box-shadow:0 0 0 18px #ff7a3d33,0 6px 0 #d4461c}}
 .miclab{max-width:250px;text-align:center;font-weight:700}
@@ -104,6 +111,17 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 .pp-card{background:#fff8e7;border-radius:24px;width:min(900px,100%);max-height:92vh;overflow:auto;padding:16px 20px;box-shadow:0 16px 50px #0005;border:6px solid #8d5524}
 .pp-head{display:flex;justify-content:space-between;align-items:center}.pp-head h2{margin:0;color:#8d5524}
 .pp-card h3{margin:14px 0 8px}.pp-card h3 small{color:#888}
+/* SHOP */
+#shop{position:fixed;inset:0;display:flex;align-items:center;justify-content:flex-end;padding:14px;pointer-events:none}
+.shop-card{pointer-events:auto;background:var(--card);backdrop-filter:blur(8px);border-radius:28px;box-shadow:0 12px 40px #0003;padding:16px 18px;width:min(520px,100%);max-height:100%;overflow:auto}
+.sh-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}.sh-head h2{margin:0;flex:1;font-size:26px;color:#ff6b2c}
+.sh-msg{margin:8px 0;font-weight:700;color:#5a6b8c;min-height:24px}
+.sh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:10px}
+.sh-item{background:#fff;border-radius:18px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 3px 0 #d9e2f0,0 0 0 3px #e7edf7 inset}
+.sh-item.on{box-shadow:0 3px 0 #1d8a55,0 0 0 4px var(--ok) inset;background:#effbf4}.sh-item.poor{opacity:.55}
+.sh-e{font-size:40px;line-height:1.1}.sh-n{font-weight:800;font-size:16px;line-height:1.15;text-align:center}.sh-p{font-weight:800;color:#e07b00;font-size:15px}.sh-note{font-size:11px;color:#8a94a8}
+.fin-wallet{font-weight:700;color:#5a6b8c;margin-bottom:6px}.shopg{background:#fff3d6}
+@media (max-width:820px){#shop{align-items:flex-end;justify-content:center}.shop-card{max-height:62vh}}
 /* FINISH */
 #fin{position:fixed;inset:0;display:grid;place-items:center;background:#0004;padding:16px}
 .fin-card{background:#fff;border-radius:30px;padding:22px 26px;text-align:center;width:min(560px,100%);max-height:92vh;overflow:auto;box-shadow:0 16px 50px #0005;animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
@@ -117,7 +135,7 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 .confetti{position:fixed;top:-20px;width:12px;height:18px;border-radius:3px;pointer-events:none;animation:fall linear forwards;z-index:50}@keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 #loading{position:fixed;inset:0;display:grid;place-items:center;font-size:24px;font-weight:800;color:#fff;background:#7cc6f5}
 @media (max-width:820px){#menu{justify-content:center}.veh{grid-template-columns:repeat(2,1fr)}#qp{flex-direction:column;gap:6px;padding:10px}.qright{align-items:center}#mini{display:none}#hudRoute{font-size:14px}#slots,#streak{display:none}}
-@media (max-height:600px){#qPrompt .big{font-size:34px}.emoji-pic{font-size:64px}.k{height:42px;font-size:22px}.pad{grid-template-columns:repeat(3,52px)}#qVisual svg{max-height:120px}}
+@media (max-height:600px){.pad4{grid-template-columns:repeat(4,50px)}.tok.n{height:46px;font-size:28px}#qPrompt .big{font-size:34px}.emoji-pic{font-size:64px}.k{height:42px;font-size:22px}.pad{grid-template-columns:repeat(3,52px)}#qVisual svg{max-height:120px}}
 </style>
 </head>
 <body>
@@ -127,7 +145,7 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 
 <div id="menu" class="hidden"><div class="menu-card">
   <div class="menu-head"><h1>Hành Trình Bé Giỏi<small>Trả lời đúng để đón khách lên toa, rồi cùng đi khắp Việt Nam!</small></h1>
-    <div class="pills"><button class="total" id="stampCount">📖 0</button><div class="total" id="total">⭐ 0</div></div></div>
+    <div class="pills"><button class="total" id="shopBtn">🛍️ Cửa hàng</button><button class="total" id="stampCount">📖 0</button><div class="total" id="total">⭐ 0</div></div></div>
   <div class="step"><div class="step-title"><b>1</b>Chọn phương tiện</div><div class="grid veh" id="vehList"></div></div>
   <div class="step"><div class="step-title"><b>2</b>Hành trình</div>
     <div class="row"><select id="startSel"></select><div class="chips" id="dirChips"></div></div>
@@ -166,9 +184,16 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 <div id="stampPop" class="hidden"></div>
 <div id="passport" class="hidden"><div class="pp-card"><div class="pp-head"><h2>📖 Sổ tem hành trình</h2><button class="ghost" id="ppClose">Đóng ✕</button></div><div id="ppBody"></div></div></div>
 
+<div id="shop" class="hidden"><div class="shop-card">
+  <div class="sh-head"><h2>🛍️ Cửa hàng trang trí</h2><div class="total" id="shopWallet">⭐ 0</div><button class="ghost" id="shopClose">Xong ✓</button></div>
+  <div class="chips"><button class="chip" data-stab="items">🎈 Đồ trang trí</button><button class="chip" data-stab="paints">🎨 Màu sơn</button></div>
+  <div class="sh-msg" id="shopMsg"></div>
+  <div class="sh-grid" id="shopGrid"></div>
+</div></div>
+
 <div id="fin" class="hidden"><div class="fin-card">
-  <h2>Về đích! 🏁</h2><div class="fin-stars" id="finStars"></div><div class="fin-msg" id="finMsg"></div><div id="finStamps"></div>
-  <div class="fin-btns"><button class="go" id="againBtn">Đi tiếp ➜</button><button class="parent hold" id="menuBtn">🔒 Phụ huynh: giữ 2 giây để đổi xe / môn học</button></div>
+  <h2>Về đích! 🏁</h2><div class="fin-stars" id="finStars"></div><div class="fin-msg" id="finMsg"></div><div class="fin-wallet" id="finWallet"></div><div id="finStamps"></div>
+  <div class="fin-btns"><button class="go" id="againBtn">Đi tiếp ➜</button><button class="ghost shopg" id="finShopBtn">🛍️ Cửa hàng trang trí</button><button class="parent hold" id="menuBtn">🔒 Phụ huynh: giữ 2 giây để đổi xe / môn học</button></div>
 </div></div>
 <!--APP-->
 </body>

@@ -11,10 +11,11 @@ Game 3D cho học sinh lớp 2: trả lời đúng câu hỏi để đón khách
 - **Đón khách đầy toa:** mỗi câu đúng thì một nhóm khách lên một toa. Đủ toa thì tàu kéo còi và chạy.
 - **Câu thưởng:** dừng trước cầu sắt hoặc đường hầm, trả lời nhanh trong 25 giây để được thêm sao.
 - **Chuỗi đúng:** đúng ngay lần đầu 3 câu liền thì chặng sau được tăng tốc.
+- **Cửa hàng trang trí:** sao kiếm được sau mỗi vòng dùng để mua màu sơn và đồ gắn lên xe (cờ, bóng bay, đèn lồng, đèn nháy, ngôi sao, mèo, cún, bồn hoa, khói cầu vồng…). Mở ở menu hoặc màn về đích.
 - **Khoá cho phụ huynh:** đang chơi không có nút đổi xe; muốn về menu phải giữ nút 🔒 trong 2 giây.
 - **Sổ tem:** đến mỗi ga mới nhận một con tem (tên ga, tỉnh/thành, món ngon hoặc nơi nổi tiếng).
 - **Bản đồ thu nhỏ:** chấm đỏ chạy trên bản đồ Việt Nam (tàu, ô tô, xe tải) hoặc sơ đồ tuyến Metro.
-- **Toán 2 – Kết nối tri thức, học kì 1:** 26 dạng bài, chia 6 chủ đề.
+- **Toán 2 – Kết nối tri thức, học kì 1:** 26 dạng bài, chia 6 chủ đề. Bài có lời văn và bài thành phần phép tính: bé tự viết cả phép tính và kết quả (vd `55 − 33 = 22`). Phần Toán không đọc thành tiếng.
 - **English – Cambridge Pre A1 Starters:** Look and write, How many?, What colour?, Listen and choose, Read and choose, Look and say (nói vào micro). Toàn bộ đề và lời nhắc bằng tiếng Anh.
 
 Tiến độ (sao, tem, ga đã đi tới) được lưu riêng trên trình duyệt của từng máy.
@@ -31,7 +32,8 @@ Mã nguồn nằm trong `src/`:
 | `src/models.js` | Tàu, metro, ô tô, xe tải, nhân vật |
 | `src/scenery.js` | Cây cối, nhà cửa, công trình đặc trưng, cầu, hầm |
 | `src/world.js` | Đường đi, dựng cảnh dần phía trước, máy quay |
-| `src/game.js` | Menu, luồng chơi, sổ tem, câu thưởng |
+| `src/game.js` | Menu, luồng chơi, sổ tem, câu thưởng, cửa hàng |
+| `src/decor.js` | Danh sách đồ trang trí, màu sơn, cách gắn lên xe |
 
 Dựng lại `index.html` sau khi sửa (cần Node.js):
 

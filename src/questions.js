@@ -103,6 +103,8 @@ const QB = (function () {
   const math = [];
   const M = (id, topic, fn) => math.push({ id, topic, gen: () => Object.assign({ subj: 'math', id, topic, sayLang: 'vi-VN' }, fn()) });
   const num = (prompt, answer, extra = {}) => Object.assign({ prompt, answer: String(answer), input: 'number', say: prompt.replace(/<[^>]+>/g, '').replace(/−/g, ' trừ ').replace(/\+/g, ' cộng ').replace(/=/g, ' bằng ').replace(/\?/g, ' bao nhiêu') }, extra);
+  // Bài cần viết cả phép tính: nums theo đúng thứ tự trong đề, op '+' hoặc '-'
+  const ex = (nums, op) => { const r = op === '+' ? nums.reduce((x, y) => x + y, 0) : nums[0] - nums[1]; const sym = op === '+' ? '+' : MINUS; return { input: 'expr', calc: { nums, op, result: r, text: `${nums.join(` ${sym} `)} = ${r}`, tokens: [...nums.flatMap((n, i) => i ? [sym, String(n)] : [String(n)]), '=', String(r)] } }; };
   const choice = (prompt, answer, choices, extra = {}) => Object.assign({ prompt, answer: String(answer), choices: choices.map(String), input: 'choice', say: prompt.replace(/<[^>]+>/g, '') }, extra);
   function colHint(a, b, op) {
     const ua = a % 10, ub = b % 10, ta = Math.floor(a / 10), tb = Math.floor(b / 10);
@@ -122,11 +124,11 @@ const QB = (function () {
   M('c1_lientruoc', 'C1 · Bài 2: Số liền trước, số liền sau', () => { const n = rand(11, 98), after = Math.random() < 0.5; return num(`Số liền ${after ? 'sau' : 'trước'} của ${n} là số nào?`, after ? n + 1 : n - 1, { visual: numberLine([n - 1, n, n + 1], after ? 2 : 0), hint: after ? `Đếm thêm 1: ${n}, ?` : `Đếm bớt 1 từ ${n}.` }); });
   M('c1_tiaso', 'C1 · Bài 2: Tia số', () => { const step = pick([1, 2, 5, 10]), s = step === 10 ? rand(0, 5) * 10 : rand(0, 80), v = [0, 1, 2, 3, 4, 5].map(i => s + i * step), k = rand(1, 4); return num('Số thích hợp ở ô dấu ? là số nào?', v[k], { visual: numberLine(v, k), hint: `Mỗi vạch cách nhau ${step} đơn vị.` }); });
   M('c1_thanhphan', 'C1 · Bài 3: Số hạng – Tổng, Số bị trừ – Số trừ – Hiệu', () => {
-    if (Math.random() < 0.5) { const a = rand(10, 60), b = rand(10, 89 - a); const t = pick(['tong', 'sohang']); if (t === 'tong') return num(`Số hạng thứ nhất là ${a}, số hạng thứ hai là ${b}. Tổng là bao nhiêu?`, a + b, { hint: `Tổng = số hạng + số hạng: ${a} + ${b}` }); return num('Tìm số hạng còn thiếu:', a, { eq: `? + ${b} = ${a + b}`, say: `Số nào cộng ${b} bằng ${a + b}?`, hint: `Lấy tổng trừ số hạng đã biết: ${a + b} ${MINUS} ${b}` }); }
-    const a = rand(30, 99), b = rand(10, a - 10); if (Math.random() < 0.6 && (a % 10) >= (b % 10)) return num(`Số bị trừ là ${a}, số trừ là ${b}. Hiệu là bao nhiêu?`, a - b, { hint: `Hiệu = số bị trừ ${MINUS} số trừ` });
+    if (Math.random() < 0.5) { const a = rand(10, 60), b = rand(10, 89 - a); const t = pick(['tong', 'sohang']); if (t === 'tong') return num(`Số hạng thứ nhất là ${a}, số hạng thứ hai là ${b}. Tổng là bao nhiêu?`, a + b, { hint: `Tổng = số hạng + số hạng`, ...ex([a, b], '+') }); return num('Tìm số hạng còn thiếu:', a, { eq: `? + ${b} = ${a + b}`, say: `Số nào cộng ${b} bằng ${a + b}?`, hint: `Lấy tổng trừ số hạng đã biết: ${a + b} ${MINUS} ${b}` }); }
+    const a = rand(30, 99), b = rand(10, a - 10); if (Math.random() < 0.6 && (a % 10) >= (b % 10)) return num(`Số bị trừ là ${a}, số trừ là ${b}. Hiệu là bao nhiêu?`, a - b, { hint: `Hiệu = số bị trừ ${MINUS} số trừ`, ...ex([a, b], '-') });
     return num('Tìm số trừ còn thiếu:', b, { eq: `${a} ${MINUS} ? = ${a - b}`, say: `${a} trừ số nào bằng ${a - b}?`, hint: `Lấy số bị trừ trừ hiệu: ${a} ${MINUS} ${a - b}` });
   });
-  M('c1_honkem', 'C1 · Bài 4: Hơn, kém nhau bao nhiêu', () => { const b = rand(10, 60), d = rand(2, 30), a = b + d; return Math.random() < 0.5 ? num(`${a} hơn ${b} bao nhiêu đơn vị?`, d, { hint: `Lấy số lớn trừ số bé: ${a} ${MINUS} ${b}` }) : num(`${b} kém ${a} bao nhiêu đơn vị?`, d, { hint: `Lấy số lớn trừ số bé: ${a} ${MINUS} ${b}` }); });
+  M('c1_honkem', 'C1 · Bài 4: Hơn, kém nhau bao nhiêu', () => { const b = rand(10, 60), d = rand(2, 30), a = b + d; return Math.random() < 0.5 ? num(`${a} hơn ${b} bao nhiêu đơn vị?`, d, { hint: `Lấy số lớn trừ số bé`, ...ex([a, b], '-') }) : num(`${b} kém ${a} bao nhiêu đơn vị?`, d, { hint: `Lấy số lớn trừ số bé`, ...ex([a, b], '-') }); });
   M('c1_sosanh', 'C1 · Bài 5: So sánh (>, <, =)', () => { const a = rand(10, 80), b = rand(1, 15), c = a + b + pick([-3, -1, 0, 0, 1, 4]); const l = a + b; const ans = l > c ? '>' : l < c ? '<' : '='; return choice(`${a} + ${b} ⬜ ${c}`, ans, ['>', '<', '='], { hint: `Tính ${a} + ${b} trước rồi so sánh với ${c}.`, big: true, say: `${a} cộng ${b}, so sánh với ${c}` }); });
   M('c1_khongnho', 'C1 · Bài 5: Cộng, trừ không nhớ trong phạm vi 100', () => { if (Math.random() < 0.5) { const ta = rand(1, 7), tb = rand(1, 8 - ta), ua = rand(0, 8), ub = rand(0, 9 - ua); return calc(ta * 10 + ua, tb * 10 + ub, '+'); } const ta = rand(3, 9), tb = rand(1, ta - 1), ua = rand(1, 9), ub = rand(0, ua); return calc(ta * 10 + ua, tb * 10 + ub, '-'); });
 
@@ -135,19 +137,19 @@ const QB = (function () {
   M('c2_tru10', 'C2 · Bài 11–12: Trừ qua 10 trong phạm vi 20', () => { const a = rand(11, 18), b = rand((a % 10) + 1, 9); return calc(a, b, '-'); });
   M('c2_thembot', 'C2 · Bài 9: Bài toán thêm, bớt một số đơn vị', () => {
     const a = rand(6, 14);
-    if (Math.random() < 0.5) { const b = rand(3, 20 - a); return num(`Trên ${CTX.veh} có ${a} ${CTX.kid}. Đến ${CTX.st}, có thêm ${b} ${CTX.kid} lên ${CTX.veh}. Hỏi trên ${CTX.veh} có tất cả bao nhiêu ${CTX.kid}?`, a + b, { story: true, hint: `"Thêm" thì làm phép cộng: ${a} + ${b}` }); }
-    const b = rand(2, a - 1); return num(`Trên ${CTX.veh} có ${a} ${CTX.kid}. Đến ${CTX.st}, có ${b} ${CTX.kid} xuống ${CTX.veh}. Hỏi trên ${CTX.veh} còn lại bao nhiêu ${CTX.kid}?`, a - b, { story: true, hint: `"Bớt / xuống" thì làm phép trừ: ${a} ${MINUS} ${b}` });
+    if (Math.random() < 0.5) { const b = rand(3, 20 - a); return num(`Trên ${CTX.veh} có ${a} ${CTX.kid}. Đến ${CTX.st}, có thêm ${b} ${CTX.kid} lên ${CTX.veh}. Hỏi trên ${CTX.veh} có tất cả bao nhiêu ${CTX.kid}?`, a + b, { story: true, hint: `"Thêm" thì làm phép cộng`, ...ex([a, b], '+') }); }
+    const b = rand(2, a - 1); return num(`Trên ${CTX.veh} có ${a} ${CTX.kid}. Đến ${CTX.st}, có ${b} ${CTX.kid} xuống ${CTX.veh}. Hỏi trên ${CTX.veh} còn lại bao nhiêu ${CTX.kid}?`, a - b, { story: true, hint: `"Bớt / xuống" thì làm phép trừ`, ...ex([a, b], '-') });
   });
   M('c2_nhieuhon', 'C2 · Bài 13: Nhiều hơn, ít hơn một số đơn vị', () => {
     const [x, y] = shuffle(NAMES).slice(0, 2), a = rand(6, 13), d = rand(2, 6), obj = pick(['quả bóng', 'ngôi sao', 'cái kẹo', 'bông hoa']);
-    if (Math.random() < 0.5) return num(`${x} có ${a} ${obj}. ${y} có nhiều hơn ${x} ${d} ${obj}. Hỏi ${y} có bao nhiêu ${obj}?`, a + d, { story: true, hint: `"Nhiều hơn" thì làm phép cộng: ${a} + ${d}` });
-    return num(`${x} có ${a + d} ${obj}. ${y} có ít hơn ${x} ${d} ${obj}. Hỏi ${y} có bao nhiêu ${obj}?`, a, { story: true, hint: `"Ít hơn" thì làm phép trừ: ${a + d} ${MINUS} ${d}` });
+    if (Math.random() < 0.5) return num(`${x} có ${a} ${obj}. ${y} có nhiều hơn ${x} ${d} ${obj}. Hỏi ${y} có bao nhiêu ${obj}?`, a + d, { story: true, hint: `"Nhiều hơn" thì làm phép cộng`, ...ex([a, d], '+') });
+    return num(`${x} có ${a + d} ${obj}. ${y} có ít hơn ${x} ${d} ${obj}. Hỏi ${y} có bao nhiêu ${obj}?`, a, { story: true, hint: `"Ít hơn" thì làm phép trừ`, ...ex([a + d, d], '-') });
   });
 
   // Chủ đề 3 – Khối lượng, dung tích
   M('c3_kg_can', 'C3 · Bài 15: Ki-lô-gam (đọc cân)', () => { const n = rand(1, 9); return num('Quả trên cân nặng bao nhiêu ki-lô-gam?', n, { visual: scaleDial(n), hint: 'Xem kim đỏ chỉ vào số nào.', unit: 'kg' }); });
-  M('c3_kg_toan', 'C3 · Bài 15: Ki-lô-gam (tính)', () => { const a = rand(10, 40), b = rand(5, 30); if (Math.random() < 0.5) return num(`Bao gạo nặng ${a} kg, bao đường nặng ${b} kg. Cả hai bao nặng bao nhiêu ki-lô-gam?`, a + b, { visual: svg(280, 170, bag(a + ' kg', '#fff3d6', 0) + bag(b + ' kg', '#e0f2fe', 150)), unit: 'kg', story: true, hint: `${a} kg + ${b} kg` }); const c = a + b; return num(`${CTX.veh[0].toUpperCase() + CTX.veh.slice(1)} chở ${c} kg hàng. Đến ${CTX.st} dỡ xuống ${b} kg. Trên ${CTX.veh} còn lại bao nhiêu ki-lô-gam hàng?`, a, { unit: 'kg', story: true, hint: `${c} kg ${MINUS} ${b} kg` }); });
-  M('c3_lit', 'C3 · Bài 16: Lít', () => { const a = rand(2, 15), b = rand(2, 15); if (Math.random() < 0.5) return num(`Can thứ nhất có ${a} l nước, can thứ hai có ${b} l nước. Cả hai can có bao nhiêu lít nước?`, a + b, { visual: svg(260, 170, can(a + ' l', 0, 0.55) + can(b + ' l', 135, 0.8)), unit: 'l', hint: `${a} l + ${b} l` }); const c = a + b; return num(`Thùng có ${c} l nước. Đã dùng ${b} l. Thùng còn lại bao nhiêu lít nước?`, a, { visual: svg(130, 170, can(c + ' l', 0, 0.9)), unit: 'l', hint: `${c} l ${MINUS} ${b} l` }); });
+  M('c3_kg_toan', 'C3 · Bài 15: Ki-lô-gam (tính)', () => { const a = rand(10, 40), b = rand(5, 30); if (Math.random() < 0.5) return num(`Bao gạo nặng ${a} kg, bao đường nặng ${b} kg. Cả hai bao nặng bao nhiêu ki-lô-gam?`, a + b, { visual: svg(280, 170, bag(a + ' kg', '#fff3d6', 0) + bag(b + ' kg', '#e0f2fe', 150)), unit: 'kg', story: true, hint: 'Cả hai bao thì làm phép cộng', ...ex([a, b], '+') }); const c = a + b; return num(`${CTX.veh[0].toUpperCase() + CTX.veh.slice(1)} chở ${c} kg hàng. Đến ${CTX.st} dỡ xuống ${b} kg. Trên ${CTX.veh} còn lại bao nhiêu ki-lô-gam hàng?`, a, { unit: 'kg', story: true, hint: '"Dỡ xuống" thì làm phép trừ', ...ex([c, b], '-') }); });
+  M('c3_lit', 'C3 · Bài 16: Lít', () => { const a = rand(2, 15), b = rand(2, 15); if (Math.random() < 0.5) return num(`Can thứ nhất có ${a} l nước, can thứ hai có ${b} l nước. Cả hai can có bao nhiêu lít nước?`, a + b, { visual: svg(260, 170, can(a + ' l', 0, 0.55) + can(b + ' l', 135, 0.8)), unit: 'l', hint: 'Cả hai can thì làm phép cộng', ...ex([a, b], '+') }); const c = a + b; return num(`Thùng có ${c} l nước. Đã dùng ${b} l. Thùng còn lại bao nhiêu lít nước?`, a, { visual: svg(130, 170, can(c + ' l', 0, 0.9)), unit: 'l', hint: '"Đã dùng" thì làm phép trừ', ...ex([c, b], '-') }); });
 
   // Chủ đề 4 – Cộng, trừ có nhớ trong phạm vi 100
   M('c4_cong21', 'C4 · Bài 19: Cộng có nhớ (số có 2 chữ số + số có 1 chữ số)', () => { const ua = rand(2, 9), ub = rand(10 - ua, 9), ta = rand(1, 8); return calc(ta * 10 + ua, ub, '+'); });
@@ -156,8 +158,8 @@ const QB = (function () {
   M('c4_tru22', 'C4 · Bài 23: Trừ có nhớ (2 chữ số − 2 chữ số)', () => { const ta = rand(3, 9), ua = rand(0, 8), ub = rand(ua + 1, 9), tb = rand(1, ta - 1); return calc(ta * 10 + ua, tb * 10 + ub, '-'); });
   M('c4_loivan', 'C4 · Bài 21, 24: Toán có lời văn (có nhớ)', () => {
     const a = rand(25, 68);
-    if (Math.random() < 0.5) { const b = rand(12, 99 - a); return num(`Đoàn ${CTX.veh} chở ${a} hành khách. Đến ${CTX.st} có thêm ${b} hành khách lên ${CTX.veh}. Hỏi trên ${CTX.veh} có tất cả bao nhiêu hành khách?`, a + b, { story: true, hint: colHint(a, b, '+') }); }
-    const b = rand(8, a - 10); return num(`Đoàn ${CTX.veh} chở ${a} hành khách. Đến ${CTX.st} có ${b} hành khách xuống ${CTX.veh}. Hỏi trên ${CTX.veh} còn lại bao nhiêu hành khách?`, a - b, { story: true, hint: colHint(a, b, '-') });
+    if (Math.random() < 0.5) { const b = rand(12, 99 - a); return num(`Đoàn ${CTX.veh} chở ${a} hành khách. Đến ${CTX.st} có thêm ${b} hành khách lên ${CTX.veh}. Hỏi trên ${CTX.veh} có tất cả bao nhiêu hành khách?`, a + b, { story: true, hint: '"Thêm" thì làm phép cộng. ' + colHint(a, b, '+'), ...ex([a, b], '+') }); }
+    const b = rand(8, a - 10); return num(`Đoàn ${CTX.veh} chở ${a} hành khách. Đến ${CTX.st} có ${b} hành khách xuống ${CTX.veh}. Hỏi trên ${CTX.veh} còn lại bao nhiêu hành khách?`, a - b, { story: true, hint: '"Xuống" thì làm phép trừ. ' + colHint(a, b, '-'), ...ex([a, b], '-') });
   });
 
   // Chủ đề 5 – Hình phẳng
@@ -171,7 +173,7 @@ const QB = (function () {
     const wrong = [names[0], names[1], names[3]].sort().join(', '), wrong2 = [names[0], names[2], names[3]].sort().join(', ');
     return choice('Ba điểm nào thẳng hàng?', right, shuffle([right, wrong, wrong2]), { visual: svg(310, 170, b.replace('stroke="#cbd5e1"', 'stroke="#ffffff00"')), hint: 'Đặt thước kẻ: ba điểm nằm trên cùng một đường thẳng.' });
   });
-  M('c5_gapkhuc', 'C5 · Bài 26: Độ dài đường gấp khúc', () => { const lens = Array.from({ length: rand(2, 3) }, () => rand(2, 9)); const p = polyline(lens); return num(`Độ dài đường gấp khúc ${p.name} là bao nhiêu xăng-ti-mét?`, lens.reduce((a, b) => a + b, 0), { visual: p.svg, unit: 'cm', hint: 'Cộng độ dài các đoạn thẳng: ' + lens.join(' + ') }); });
+  M('c5_gapkhuc', 'C5 · Bài 26: Độ dài đường gấp khúc', () => { const lens = Array.from({ length: rand(2, 3) }, () => rand(2, 9)); const p = polyline(lens); return num(`Độ dài đường gấp khúc ${p.name} là bao nhiêu xăng-ti-mét?`, lens.reduce((a, b) => a + b, 0), { visual: p.svg, unit: 'cm', hint: 'Cộng độ dài tất cả các đoạn thẳng', ...ex(lens, '+') }); });
   M('c5_tugiac', 'C5 · Bài 26: Hình tứ giác', () => { const cols = shuffle(['#ffd166', '#8ecae6', '#cdb4db', '#b7e4c7']); const opts = shuffle(['tri', 'quad', 'circle', 'penta']); return choice('Hình nào là hình tứ giác?', String(opts.indexOf('quad')), ['0', '1', '2', '3'], { pics: opts.map((k, i) => shapeSvg(k, cols[i])), hideWords: true, hint: 'Hình tứ giác có 4 cạnh và 4 đỉnh.' }); });
 
   // Chủ đề 6 – Ngày, giờ, tháng

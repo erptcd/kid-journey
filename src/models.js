@@ -110,8 +110,8 @@ export function setFilled(p, on) {
 }
 export const GLOW = () => mat(0xfff1b8, { roughness: 0.2, emissive: 0xffd36b, emissiveIntensity: 0.55, transparent: true, opacity: 0.75 });
 
-export function steamLoco() {
-  const g = new THREE.Group(); const RED = 0xe63946, DARK = 0x2b2d42, GOLD = 0xffc23d;
+export function steamLoco(RED = 0xe63946) {
+  const g = new THREE.Group(); const DARK = 0x2b2d42, GOLD = 0xffc23d;
   rbox(2.3, 0.45, 8.2, 0.12, DARK, 0, 1.05, 0.2, g);
   rbox(2.5, 0.16, 8.2, 0.06, RED, 0, 1.33, 0.2, g);
   const boiler = cyl(1.05, 1.05, 4.6, 32, RED, g); boiler.rotation.x = Math.PI / 2; boiler.position.set(0, 2.45, 1.4);
@@ -138,6 +138,7 @@ export function steamLoco() {
   const rods = [-1, 1].map(s => { const r = rbox(0.1, 0.16, 3.4, 0.05, 0xc0c0c0, s * 1.42, 1.0, -0.6, g); r.material = mat(0xd0d0d0, { metalness: 0.7, roughness: 0.3 }); return r; });
   g.userData.update = (a) => rods.forEach((r, i) => { r.position.y = 1.0 + Math.sin(a + i * 1.57) * 0.35; r.position.z = -0.6 + Math.cos(a + i * 1.57) * 0.35; });
   g.userData.chimney = new THREE.Vector3(0, 4.6, 3.1);
+  g.userData.meta = { hw: 1.25, roofY: 4.39, z0: -3.4, z1: -1.0, front: [0, 2.45, 4.42], flag: [1.15, 4.39, -3.3], star: [0, 4.39, -2.2], pet: [0, 3.55, 1.6] };
   return g;
 }
 export function carriage(color) {
@@ -150,6 +151,7 @@ export function carriage(color) {
   const roof = sh(new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 6.9, 32, 1, false, -Math.PI / 2, Math.PI), mat(0xf8f9fa))); roof.rotation.x = Math.PI / 2; roof.rotation.y = Math.PI; roof.scale.set(1, 1, 0.35); roof.position.set(0, 3.55, 0); g.add(roof);
   passengers(g, 5, [-0.6, 0.6], 3.0, -2.4, 1.22);
   [-2.3, 2.3].forEach(z => [-1.2, 1.2].forEach(x => wheel(0.5, 0.24, 0x2b2d42, 0x9aa0a6, x, 0.85, z, g)));
+  g.userData.meta = { hw: 1.36, roofY: 4.05, z0: -3.2, z1: 3.2, winY: 2.42, pet: [0, 4.05, -1.5] };
   return g;
 }
 export function tramCar(front, dest) {
@@ -175,7 +177,7 @@ export function tramCar(front, dest) {
   [-3, 3].forEach(z => [-1.1, 1.1].forEach(x => wheel(0.42, 0.22, 0x333333, 0x777777, x, 0.6, z, g, false)));
   return g;
 }
-export function car(color = 0xff4d6d) {
+export function car(color = 0xff4d6d) { // eslint-disable-line
   const g = new THREE.Group();
   g.add(profile([[-2.2, 0.35], [2.15, 0.35], [2.3, 0.85], [2.05, 1.08], [0.85, 1.22], [-1.85, 1.22], [-2.3, 1.05]], 1.75, 0.16, color));
   const gl = profile([[0.85, 1.2], [0.27, 1.84], [-1.25, 1.84], [-1.85, 1.2]], 1.9, 0, GLASS()); gl.castShadow = false; g.add(gl);
@@ -187,11 +189,12 @@ export function car(color = 0xff4d6d) {
   rbox(2.15, 0.3, 0.3, 0.14, 0xdee2e6, 0, 0.5, 2.38, g); rbox(2.15, 0.3, 0.3, 0.14, 0xdee2e6, 0, 0.5, -2.38, g);
   [-1, 1].forEach(s => rbox(0.25, 0.18, 0.12, 0.05, color, s * 1.12, 1.25, 0.75, g));
   [-1.45, 1.45].forEach(z => [-0.98, 0.98].forEach(x => wheel(0.44, 0.34, 0x222222, 0xced4da, x, 0.44, z, g, false)));
+  g.userData.meta = { hw: 0.92, roofY: 1.99, z0: -1.3, z1: 0.3, front: [0, 0.72, 2.47], flag: [-0.7, 1.99, -1.2], star: [0, 1.99, -0.5], pet: [0, 1.99, -0.6], small: true };
   g.scale.setScalar(1.15);
   return g;
 }
-export function truck() {
-  const g = new THREE.Group(); const ORANGE = 0xf77f00, TEAL = 0x2a9d8f;
+export function truck(ORANGE = 0xf77f00, TEAL = 0x2a9d8f) {
+  const g = new THREE.Group();
   rbox(2.2, 0.45, 9.2, 0.12, 0x2b2d42, 0, 1.05, 0, g);
   g.add(profile([[2.3, 0.85], [4.95, 0.85], [5.05, 1.75], [4.98, 2.05], [2.3, 2.05]], 2.25, 0.18, ORANGE));
   const ws = profile([[2.45, 2.0], [4.95, 2.0], [4.72, 3.15], [2.45, 3.15]], 2.45, 0, GLASS()); ws.castShadow = false; g.add(ws);
@@ -207,12 +210,13 @@ export function truck() {
   [-1, 1].forEach(s => rbox(0.14, 0.7, 6.6, 0.05, TEAL, s * 1.33, 1.85, -1.35, g));
   rbox(2.8, 0.7, 0.14, 0.05, TEAL, 0, 1.85, -4.6, g); rbox(2.8, 1.2, 0.18, 0.05, 0x1d6f66, 0, 2.1, 1.85, g);
   g.userData.bed = { y: 1.55, z0: -4.2, z1: 1.4 };
+  g.userData.meta = { hw: 1.25, roofY: 3.47, z0: 2.4, z1: 4.7, front: [0, 1.75, 5.3], flag: [1.0, 3.47, 2.6], star: [0, 3.47, 3.5], pet: [0, 3.47, 3.4] };
   [3.6, -1.6, -3.2].forEach(z => [-1.18, 1.18].forEach(x => wheel(0.62, 0.45, 0x222222, 0xced4da, x, 0.62, z, g, false)));
   return g;
 }
 
-export function metroCar(front, dest) {
-  const g = new THREE.Group(); const WHITE = 0xf4f6f9, BLUE = 0x1565c0, CYAN = 0x29b6f6;
+export function metroCar(front, dest, BLUE = 0x1565c0) {
+  const g = new THREE.Group(); const WHITE = 0xf4f6f9, CYAN = 0x29b6f6;
   rbox(2.9, 3.0, 10, 0.35, WHITE, 0, 2.1, 0, g);
   rbox(2.94, 0.28, 10.02, 0.08, BLUE, 0, 1.25, 0, g);
   rbox(2.94, 0.1, 10.02, 0.04, CYAN, 0, 1.47, 0, g);
@@ -232,6 +236,7 @@ export function metroCar(front, dest) {
     rbox(1.5, 0.07, 0.16, 0.03, 0x333333, 0, 0.95, 0, pg);
   }
   [-3.5, 3.5].forEach(z => [-1.1, 1.1].forEach(x => wheel(0.42, 0.22, 0x333333, 0x777777, x, 0.55, z, g, false)));
+  g.userData.meta = { hw: 1.47, roofY: 3.62, z0: -4.6, z1: 4.6, winY: 1.95, front: front ? [0, 1.25, 5.97] : null, flag: [0.95, 3.62, 3.6], star: [0, 3.62, 2.2], pet: [0, 3.62, -2] };
   return g;
 }
 

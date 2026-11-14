@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as MD from './models.js';
 import * as SC from './scenery.js';
 import { BIOMES } from './data.js';
+import * as DC from './decor.js';
 const V3 = THREE.Vector3;
 const { mat, rbox, cyl, sign, gc } = MD;
 
@@ -139,7 +140,7 @@ W.setup = function (opt) {
   R.veh = makeVehicle();
   R.veh.s = headStopS(0); placeVehicle(R.veh.s, 0);
   ensureChunks(R.veh.s);
-  R.cam = { pos: new V3(), look: new V3(), shift: 0, shiftT: 0, fov: 48 };
+  R.cam = { pos: new V3(), look: new V3(), shift: 0, shiftT: 0, shiftX: 0, shiftXT: 0, fov: 48 };
   snapCam();
   return { stationS: R.stationS, feats: R.feats, L: path.L };
 };
@@ -211,10 +212,12 @@ function headStopS(i) { return R.stationS[i] + R.veh_len / 2; }
 function makeVehicle() {
   const parts = [], gaps = [], add = (o, gap) => { parts.push(o); gaps.push(gap); world.add(o); };
   const n = R.slots;
-  if (R.kind === 'train') { add(MD.steamLoco(), 0); const cols = [0xffb703, 0x2a9d8f, 0x8338ec, 0xe76f51]; for (let k = 0; k < n; k++) add(MD.carriage(cols[k % 4]), k === 0 ? 7.9 : 7.3); }
-  else if (R.kind === 'metro') { for (let k = 0; k < n; k++) add(MD.metroCar(k === 0, R.st[R.st.length - 1].name), k === 0 ? 0 : k === 1 ? 11.6 : 10.3); }
-  else if (R.kind === 'car') add(MD.car(), 0);
-  else add(MD.truck(), 0);
+  const decor = R.opt.decor || [], paint = DC.paintOf(decor);
+  if (R.kind === 'train') { add(MD.steamLoco(paint.loco), 0); for (let k = 0; k < n; k++) add(MD.carriage(paint.cars[k % 4]), k === 0 ? 7.9 : 7.3); }
+  else if (R.kind === 'metro') { for (let k = 0; k < n; k++) add(MD.metroCar(k === 0, R.st[R.st.length - 1].name, paint.metro), k === 0 ? 0 : k === 1 ? 11.6 : 10.3); }
+  else if (R.kind === 'car') add(MD.car(paint.car), 0);
+  else add(MD.truck(paint.truck[0], paint.truck[1]), 0);
+  DC.applyDecor(parts, R.kind, decor);
   const off = []; let acc = 0; gaps.forEach(g => { acc += g; off.push(acc); });
   R.veh_len = acc + (R.kind === 'car' ? 5 : R.kind === 'truck' ? 9 : 8);
   const v = { parts, off, s: 0, y: R.track === 'rail' ? 0.32 : R.track === 'metro' ? 0.2 : 0.05, slots: [] };
@@ -351,11 +354,18 @@ W.unload = function (done) {
 /* ================= driving ================= */
 W.drive = function (toS, opts = {}) { R.drive = { to: toS, v: R.drive?.v || 0, vmax: opts.vmax || 22, done: opts.done }; R.camMode = 'drive'; R.camT = 0; };
 W.headStopS = i => headStopS(i);
+W.redecorate = function (decor) {
+  if (!R) return; R.opt.decor = decor;
+  const s = R.veh.s, filled = R.veh.slots.map(sl => sl.filled());
+  R.veh.parts.forEach(p => world.remove(p));
+  R.veh = makeVehicle(); R.veh.s = s; placeVehicle(s, 0);
+  filled.forEach((f, k) => f && R.veh.slots[k] && R.kind !== 'truck' && R.veh.slots[k].fill(true));
+};
 W.vehS = () => R.veh.s;
 W.setBoost = on => { R.boost = on ? 1 : 0; };
 W.setCamUser = m => { R.camUser = m; };
 W.setCamBoard = () => { R.camMode = 'board'; };
-W.setShift = px => { R.cam.shiftT = px; };
+W.setShift = (py, px = 0) => { R.cam.shiftT = py; R.cam.shiftXT = px; };
 W.inTunnel = () => isTunnel(R.veh.s);
 function isTunnel(s) { if (R.track === 'metro') return P(s).y < -1.5; return R.feats.some(f => f.type === 'tunnel' && Math.abs(s - f.s) < 42); }
 W.stationInfo = i => R.st[i];
@@ -368,7 +378,7 @@ function camTarget(dt) {
   const pos = new V3(), look = new V3();
   if (R.camMode === 'board') {
     const under = R.track === 'metro' && P(mid).y < -1.5;
-    const dist = under ? 15.5 : 15 + R.veh_len * 0.4, h = under ? 5.5 : 7 + R.veh_len * 0.12;
+    const dist = under ? 15.5 : 15 + R.veh_len * 0.4 + (R.track === 'road' ? 5 : 0), h = under ? 5.5 : 7 + R.veh_len * 0.12;
     const sd = R.track === 'road' ? -1 : 1;
     pos.copy(pm).addScaledVector(sv, sd * dist).addScaledVector(t, -3).add(new V3(0, h, 0));
     look.copy(pm).addScaledVector(sv, sd > 0 ? 1.5 : 3.5).add(new V3(0, 2.2, 0));
@@ -425,9 +435,9 @@ W.update = function (dt, time) {
   R.cam.pos.lerp(ct.pos, k); R.cam.look.lerp(ct.look, k);
   camera.position.copy(R.cam.pos); camera.lookAt(R.cam.look);
   const fovT = (innerWidth / innerHeight < 0.8 ? 62 : 48) + (R.boost && moving ? 10 : 0); R.cam.fov = lerp(R.cam.fov, fovT, 1 - Math.exp(-dt * 3)); camera.fov = R.cam.fov;
-  R.cam.shift += (R.cam.shiftT - R.cam.shift) * (1 - Math.exp(-dt * 4));
+  R.cam.shift += (R.cam.shiftT - R.cam.shift) * (1 - Math.exp(-dt * 4)); R.cam.shiftX += (R.cam.shiftXT - R.cam.shiftX) * (1 - Math.exp(-dt * 4));
   const w = innerWidth, h = innerHeight;
-  if (Math.abs(R.cam.shift) > 0.5) camera.setViewOffset(w, h, 0, R.cam.shift, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
+  if (Math.abs(R.cam.shift) > 0.5 || Math.abs(R.cam.shiftX) > 0.5) camera.setViewOffset(w, h, R.cam.shiftX, R.cam.shift, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   camera.updateProjectionMatrix();
   const lp = v.parts[0].position;
   sun.position.set(lp.x + 45, lp.y + 90, lp.z + 30); sun.target.position.copy(lp);
@@ -437,7 +447,21 @@ W.update = function (dt, time) {
 
 /* ---------- boost sparkles ---------- */
 const fx = [];
+let smokeT = 0; const smoke = [];
+const RAINBOW = [0xff595e, 0xff924c, 0xffca3a, 0x8ac926, 0x1982c4, 0x6a4c93].map(c => new THREE.MeshStandardMaterial({ color: c, transparent: true, opacity: 0.8, depthWrite: false, roughness: 1 }));
+function updateSmoke(dt, moving) {
+  if (R.kind !== 'train') return;
+  const loco = R.veh.parts[0], rainbow = (R.opt.decor || []).includes('rainbow');
+  smokeT -= dt;
+  if (smokeT <= 0 && smoke.length < 45) {
+    smokeT = moving ? 0.09 : 0.5;
+    const m = new THREE.Mesh(gc('puff', () => new THREE.SphereGeometry(0.5, 10, 8)), rainbow ? RAINBOW[smoke.length % 6].clone() : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, transparent: true, opacity: 0.75, depthWrite: false, roughness: 1 }));
+    m.position.copy(loco.userData.chimney).applyMatrix4(loco.matrixWorld); world.add(m); smoke.push({ m, life: 1, vx: (Math.random() - 0.5) * 0.8, vz: (Math.random() - 0.5) * 0.8 });
+  }
+  for (let i = smoke.length - 1; i >= 0; i--) { const o = smoke[i]; o.life -= dt * 0.6; o.m.position.y += dt * 2.6; o.m.position.x += o.vx * dt; o.m.position.z += o.vz * dt; o.m.scale.setScalar(0.5 + (1 - o.life) * 2); o.m.material.opacity = Math.max(0, o.life) * 0.7; if (o.life <= 0) { o.m.parent && o.m.parent.remove(o.m); o.m.material.dispose(); smoke.splice(i, 1); } }
+}
 function updateFx(dt, moving) {
+  updateSmoke(dt, moving); DC.animateDecor(R.veh.parts, performance.now() / 1000);
   if (R.boost && moving && fx.length < 80) {
     const p = R.veh.parts[R.veh.parts.length - 1].position, m = new THREE.Mesh(gc('spark', () => new THREE.OctahedronGeometry(0.35, 0)), mat([0xffd23f, 0xff70a6, 0x4cc9f0, 0xffffff][fx.length % 4], { emissive: 0xffffff, emissiveIntensity: 0.6 }));
     m.position.set(p.x + (Math.random() - 0.5) * 3, p.y + 1 + Math.random() * 3, p.z + (Math.random() - 0.5) * 3); world.add(m); fx.push({ m, life: 1 });

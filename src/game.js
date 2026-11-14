@@ -4,6 +4,7 @@ import { TRAIN, METRO, VEHICLES } from './data.js';
 import { VN_OUTLINE } from './vnmap.js';
 import QB from './questions.js';
 import QUI from './ui.js';
+import { ITEMS, PAINTS } from './decor.js';
 
 const $ = s => document.querySelector(s);
 const store = {
@@ -21,6 +22,7 @@ const sfx = {
   horn(k) { if (k === 'train') [0, 0.6].forEach(d => { tone(392, 0.5, 'square', 0.05, d); tone(494, 0.5, 'square', 0.04, d); }); else if (k === 'metro') { tone(1250, 0.09, 'sine', 0.12); tone(1250, 0.09, 'sine', 0.12, 0.16); } else [0, 0.3].forEach(d => { tone(440, 0.22, 'sawtooth', 0.05, d); tone(554, 0.22, 'sawtooth', 0.04, d); }); },
   stamp() { tone(140, 0.18, 'square', 0.12); tone(90, 0.25, 'sine', 0.2, 0.02); [784, 1047].forEach((f, i) => tone(f, 0.2, 'triangle', 0.12, 0.2 + i * 0.12)); },
   boost() { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.14, 'square', 0.06, i * 0.06)); },
+  buy() { [988, 1319, 1568].forEach((f, i) => tone(f, 0.12, 'triangle', 0.14, i * 0.07)); },
   win() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.32, 'triangle', 0.16, i * 0.13)); }
 };
 
@@ -78,12 +80,14 @@ function renderMenu() {
 }
 function setupWorld() {
   S.route = routeStations();
-  const info = W.setup({ kind: S.veh, stations: S.route, slots: S.slots, legLen: 300, seed: 11 + startIdx() * 97 + (S.dir > 0 ? 0 : 5), dir: S.dir, stopWord: stopWord() });
-  S.info = info; W.prepareWaiters(0); W.setCamBoard(); W.setShift(0);
+  const info = W.setup({ kind: S.veh, stations: S.route, slots: S.slots, legLen: 300, seed: 11 + startIdx() * 97 + (S.dir > 0 ? 0 : 5), dir: S.dir, stopWord: stopWord(), decor: equipped() });
+  S.info = info; W.prepareWaiters(0); W.setCamBoard(); frameSide();
 }
+// Khi có bảng menu/cửa hàng bên phải: dời khung hình để thấy phương tiện ở nửa trái
+function frameSide(on = true) { if (!on) return W.setShift(0, 0); if (innerWidth > 820) W.setShift(0, innerWidth * 0.2); else W.setShift(innerHeight * 0.22, 0); }
 function showMenu() {
   S.mode = 'menu'; QUI.abort(); clearBonus();
-  ['#hud', '#qp', '#fin', '#banner', '#mini', '#passport'].forEach(s => $(s).classList.add('hidden'));
+  ['#hud', '#qp', '#fin', '#banner', '#mini', '#passport', '#shop'].forEach(s => $(s).classList.add('hidden'));
   $('#menu').classList.remove('hidden'); previewKey = ''; renderMenu();
 }
 
@@ -91,7 +95,7 @@ function showMenu() {
 function start() {
   ac(); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false);
   setupWorld();
-  $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden');
+  $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden'); frameSide(false);
   drawMini(); renderHud();
   arriveAt(0, true);
 }
@@ -179,12 +183,49 @@ function finish() {
   $('#finStars').textContent = '⭐'.repeat(gold) + '☆'.repeat(total - gold) + (S.bonus ? '  +' + '🌟'.repeat(S.bonus) : '');
   const r = total ? gold / total : 0;
   $('#finMsg').textContent = r === 1 ? 'Hoàn hảo! Bé đúng hết ngay lần đầu! 🏆' : r >= 0.6 ? `Giỏi lắm! Bé được ${gold + S.bonus} sao.` : `Bé được ${gold + S.bonus} sao. Chơi tiếp để giỏi hơn nhé!`;
+  $('#finWallet').textContent = `Bé đang có ${store.get('total', 0)} ⭐ để mua đồ trang trí`;
   $('#finStamps').innerHTML = S.newStamps.length ? `<div class="fs-t">Tem mới:</div><div class="stamps small">${S.newStamps.map(x => stampHtml(x, true)).join('')}</div>` : '';
   const nx = L[store.get(progKey(), 0)];
   $('#againBtn').textContent = endIdx >= L.length - 1 ? 'Đi lại từ đầu tuyến 🔁' : `Đi tiếp từ ${stopWord()} ${nx.name} ➜`;
   setTimeout(() => { $('#fin').classList.remove('hidden'); sfx.win(); confetti(); }, 500);
 }
 function confetti() { const c = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#ff924c']; for (let i = 0; i < 90; i++) { const d = document.createElement('div'); d.className = 'confetti'; d.style.left = Math.random() * 100 + 'vw'; d.style.background = c[i % 6]; d.style.animationDuration = (2 + Math.random() * 2.5) + 's'; d.style.animationDelay = Math.random() * 0.8 + 's'; document.body.appendChild(d); setTimeout(() => d.remove(), 5500); } }
+
+/* ---------- cửa hàng trang trí ---------- */
+const owned = () => store.get('owned', ['paint_classic']);
+function equipped() { return store.get('equip', ['paint_classic']); }
+let shopTab = 'items', shopFrom = 'menu';
+function openShop(from) {
+  shopFrom = from; $('#shop').classList.remove('hidden');
+  if (from === 'menu') $('#menu').classList.add('hidden'); else $('#fin').classList.add('hidden');
+  frameSide();
+  renderShop();
+}
+function closeShop() { $('#shop').classList.add('hidden'); if (shopFrom === 'menu') { $('#menu').classList.remove('hidden'); renderMenu(); } else { $('#fin').classList.remove('hidden'); frameSide(false); } }
+function renderShop(msg) {
+  const wallet = store.get('total', 0), own = owned(), eq = equipped();
+  $('#shopWallet').textContent = `⭐ ${wallet}`;
+  document.querySelectorAll('[data-stab]').forEach(b => { b.classList.toggle('sel', b.dataset.stab === shopTab); b.onclick = () => { sfx.tap(); shopTab = b.dataset.stab; renderShop(); }; });
+  const list = shopTab === 'items' ? ITEMS : PAINTS, g = $('#shopGrid'); g.innerHTML = '';
+  list.forEach(it => {
+    const has = own.includes(it.id), on = eq.includes(it.id), d = document.createElement('button');
+    const note = it.only && !it.only.includes(S.veh) ? `<span class="sh-note">chỉ cho ${it.only.map(v => ({ train: 'tàu hoả', metro: 'metro' }[v])).join(', ')}</span>` : '';
+    d.className = 'sh-item' + (on ? ' on' : '') + (!has && it.price > wallet ? ' poor' : '');
+    d.innerHTML = `<span class="sh-e">${it.emo}</span><span class="sh-n">${it.name}</span>${note}<span class="sh-p">${has ? (on ? '✅ Đang dùng' : 'Bấm để dùng') : `⭐ ${it.price}`}</span>`;
+    d.onclick = () => {
+      let e = equipped();
+      if (!has) {
+        if (it.price > store.get('total', 0)) { sfx.tap(); return renderShop(`Còn thiếu ${it.price - store.get('total', 0)} ⭐. Chơi thêm để kiếm sao nhé!`); }
+        store.set('total', store.get('total', 0) - it.price); store.set('owned', [...owned(), it.id]); sfx.buy();
+        if (shopTab === 'paints') e = e.filter(x => !x.startsWith('paint_')); e = [...e, it.id]; msg = `🎉 Bé đã mua ${it.name}!`;
+      } else if (shopTab === 'paints') { e = [...e.filter(x => !x.startsWith('paint_')), it.id]; sfx.tap(); }
+      else { e = on ? e.filter(x => x !== it.id) : [...e, it.id]; sfx.tap(); }
+      store.set('equip', e); W.redecorate(e); renderShop(msg);
+    };
+    g.appendChild(d);
+  });
+  $('#shopMsg').textContent = msg || 'Mỗi câu đúng ngay lần đầu được 1 ⭐. Dùng sao để trang trí phương tiện!';
+}
 
 /* ---------- HUD ---------- */
 let bannerT = 0;
@@ -236,6 +277,9 @@ holdButton($('#menuBtn'), 2000, () => { sfx.tap(); showMenu(); }, '🔒 Phụ hu
 $('#ppBtn').onclick = () => { sfx.tap(); showPassport(); };
 $('#stampCount').onclick = () => { sfx.tap(); showPassport(); };
 $('#ppClose').onclick = () => $('#passport').classList.add('hidden');
+$('#shopBtn').onclick = () => { sfx.tap(); openShop('menu'); };
+$('#finShopBtn').onclick = () => { sfx.tap(); openShop('fin'); };
+$('#shopClose').onclick = () => { sfx.tap(); closeShop(); };
 const CAMS = [['auto', '🎥 Tự động'], ['chase', '🎥 Sau tàu'], ['side', '🎥 Bên hông'], ['high', '🎥 Trên cao']];
 $('#camBtn').onclick = () => { const i = (CAMS.findIndex(c => c[0] === S.camUser) + 1) % CAMS.length; S.camUser = CAMS[i][0]; W.setCamUser(S.camUser); $('#camBtn').title = CAMS[i][1]; banner(CAMS[i][1], 1000); };
 function setMute() { $('#muteBtn').textContent = muted ? '🔇' : '🔊'; QUI.setMuted(muted); }
