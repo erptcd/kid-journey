@@ -7,7 +7,7 @@ Game 3D cho học sinh lớp 2: trả lời đúng câu hỏi để đón khách
 ## Có gì trong game
 
 - **8 phương tiện:** Tàu hoả Bắc – Nam (19 ga, Hà Nội → Sài Gòn), Metro số 1 TP.HCM (14 ga, 3 ga đầu đi ngầm), Ô tô đón bạn, Taxi chở khách, Xe tải chở đặc sản, Xe cảnh sát, Xe cứu thương, Xe cứu hoả (đèn ưu tiên nhấp nháy, còi hú).
-- **Âm thanh khi chạy:** tàu hoả xình xịch và tiếng bánh sắt qua mối ray, metro rít động cơ điện, ô tô/taxi/xe tải tiếng máy theo tốc độ, xe tải xả phanh hơi khi dừng, xe ưu tiên hú còi. Âm thanh tạo bằng WebAudio, không cần file.
+- **Âm thanh khi chạy:** dùng tiếng thu thật (còi hơi + hơi nước tàu hoả, tàu điện khởi hành, còi ô tô, xe tải nổ máy + còi hơi, tiếng máy ô tô đổi tốc độ theo vòng tua). Còi xe ưu tiên làm theo thông số Nghị định 109/2009/NĐ-CP: cứu hoả WAIL 580–1400 Hz, công an YELP 500–850 Hz, cứu thương HI-LO 600–800 Hz.
 - **Cảnh vật theo vùng:** phố cổ và Hồ Gươm, ruộng lúa và lũy tre, núi đá vôi Tràng An, Đại Nội Huế, cầu Rồng Đà Nẵng, tháp Chăm, biển miền Trung, thanh long, rừng cao su, nhà cao tầng Sài Gòn…
 - **Đón khách đầy toa:** mỗi câu đúng thì một nhóm khách lên một toa. Đủ toa thì tàu kéo còi và chạy.
 - **Câu thưởng:** dừng trước cầu sắt hoặc đường hầm, trả lời nhanh trong 25 giây để được thêm sao.
@@ -51,3 +51,4 @@ git add . && git commit -m "Cập nhật" && git push
 - Thư viện 3D: [three.js](https://threejs.org) (MIT). Phông chữ: Baloo 2 (Google Fonts, OFL).
 - Đường viền bản đồ Việt Nam: [world.geo.json](https://github.com/johan/world.geo.json) (dữ liệu Natural Earth).
 - Hình minh hoạ từ vựng là emoji của hệ điều hành.
+- Âm thanh thu thật từ [OpenSFX](https://github.com/OpenTTD/OpenSFX): "steam train horn 01" – eliasheuninck (CC BY 3.0), "Steam" – Janis Lukss (CC BY 3.0), "metro.wav" – Marec, chỉnh sửa Janis Lukss (CC BY 3.0), "claxon.wav" – han1, chỉnh sửa Janis Lukss (CC BY 3.0), "file0375.mp3" – saphix + "Industrial Air Horn" – mcpable, chỉnh sửa Wuzzy (CC0). Tiếng máy ô tô: Kenney Starter Kit Racing (CC0). Các file đã được cắt, đổi định dạng và đổi tốc độ phát trong game.

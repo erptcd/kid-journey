@@ -331,7 +331,7 @@ export function ambulance() {
     const t = sign('CẤP CỨU 115', 2.4, 0.38, '#ffffff00', '#e53935'); t.position.set(sd * 1.2, 1.62, -1.0); t.rotation.y = sd * Math.PI / 2; g.add(t); });
   const back = sign('✚', 1.0, 1.0, '#ffffff', '#e53935'); back.position.set(0, 2.2, -2.92); g.add(back);
   rbox(0.04, 2.0, 0.06, 0.02, 0x9e9e9e, 0, 1.9, -2.91, g);
-  lightBar(g, 2.6, 1.15, 1.6, [0xff1f1f, 0x1f5bff]);
+  lightBar(g, 2.6, 1.15, 1.6, [0xff1f1f, 0xff1f1f]);
   rbox(2.1, 0.32, 0.3, 0.12, 0xdee2e6, 0, 0.6, 2.95, g);
   [-0.65, 0.65].forEach(x => ball(0.15, mat(0xfff3b0, { emissive: 0xffe08a, emissiveIntensity: 1.3 }), x, 1.0, 2.88, g, 12).scale.set(1.3, 0.8, 0.5));
   const driver = person({ cloth: 0xffffff, cap: 0xffffff }); driver.scale.setScalar(0.5); driver.position.set(0.45, 0.85, 1.35); g.add(driver);
