@@ -3,7 +3,7 @@ import QB from './questions.js';
 const QUI = (function () {
   'use strict';
   const $ = s => document.querySelector(s);
-  let q = null, input = '', toks = [], attempts = 0, locked = false, tiles = [], stack = [], fixed = 0, onDone = null, muted = false;
+  let q = null, input = '', toks = [], slots = [], kinds = [], cur = 0, opHint = false, attempts = 0, locked = false, tiles = [], stack = [], fixed = 0, onDone = null, muted = false;
   const T = {
     vi: { tryAgain: 'Chưa đúng rồi, bé thử lại nhé! 💪', hint: '💡 ', reveal: a => `Đáp án là <b>${a}</b>. Mình nhớ nhé!`, next: 'Đi tiếp ➜', ok: ['Chính xác! 🎉', 'Giỏi quá! 🌟', 'Tuyệt vời! 👏', 'Đúng rồi! 🎈'], listen: '🔊 Nghe' },
     en: { tryAgain: 'Oops! Try again! 💪', hint: '💡 ', reveal: a => `The answer is <b>${a}</b>.`, next: 'Next ➜', ok: null, listen: '🔊 Listen' }
@@ -14,14 +14,15 @@ const QUI = (function () {
     try { const s = speechSynthesis; s.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = lang.startsWith('en') ? 0.8 : 0.95; const v = s.getVoices().find(v => (v.lang || '').toLowerCase().replace('_', '-').startsWith(lang.slice(0, 2))); if (v) u.voice = v; s.speak(u); } catch (e) { }
   }
   function show(question, done) {
-    q = question; onDone = done; input = ''; toks = []; attempts = 0; locked = false; fixed = 0;
+    q = question; onDone = done; input = ''; toks = []; attempts = 0;
+    if (q.input === 'expr') { kinds = q.calc.nums.flatMap((_, i) => i ? ['o', 'n'] : ['n']).concat('r'); slots = kinds.map(() => ''); cur = 0; } locked = false; fixed = 0;
     if (q.input === 'text') {
       const letters = q.answer.split(''), abc = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(c => !letters.includes(c));
       tiles = QB.shuffle(letters.concat(QB.shuffle(abc).slice(0, q.answer.length <= 4 ? 2 : 1))).map(ch => ({ ch, used: false })); stack = [];
     }
     $('#qListen').textContent = L().listen;
     $('#qListen').style.display = q.subj === 'math' ? 'none' : ''; // Toán: im lặng để bé tự làm
-    fb('', q.input === 'expr' ? '<span class="exh">✏️ Bé viết phép tính: số → dấu + hoặc − → số → dấu = → kết quả</span>' : '');
+    fb('', q.input === 'expr' ? '<span class="exh">✏️ Đọc đề rồi điền vào các ô: số, dấu (+ hoặc −), số và kết quả. Bấm vào ô để sửa.</span>' : '');
     render();
     if (q.autoSay) setTimeout(() => speak(q.say, q.sayLang), 250);
     else if (q.subj === 'en' && q.input !== 'speak') setTimeout(() => speak(q.prompt.replace(/Look at the picture\. /, ''), 'en-US'), 250);
@@ -39,13 +40,15 @@ const QUI = (function () {
       ['7', '8', '9', '4', '5', '6', '1', '2', '3', '⌫', '0', '✓'].forEach(k => pad.appendChild(btn(k, 'k' + (k === '✓' ? ' ok' : k === '⌫' ? ' del' : ''), () => key(k === '⌫' ? 'Backspace' : k === '✓' ? 'Enter' : k))));
       r.appendChild(pad);
     } else if (q.input === 'expr') {
-      const last = toks[toks.length - 1], typingNum = last != null && /^\d+$/.test(last);
-      const eqAt = toks.indexOf('=');
       let h = '<span class="exl">Phép tính:</span>';
-      toks.forEach((t, i) => { h += /^\d+$/.test(t) ? `<span class="tok n ${i === toks.length - 1 && !locked ? 'cur' : ''}">${t}</span>` : `<span class="tok o">${t}</span>`; });
-      if (!typingNum && !locked) h += '<span class="tok n cur blink"></span>';
-      if (q.unit && eqAt >= 0) h += `<span class="unit">${q.unit}</span>`;
+      kinds.forEach((kd, i) => {
+        if (kd === 'r') h += '<span class="tok eq">=</span>';
+        const v = slots[i], c = i === cur && !locked ? ' cur' + (v ? '' : ' blink') : '';
+        h += `<span class="tok ${kd === 'o' ? 'op' : 'n'}${c}" data-slot="${i}">${v}</span>`;
+      });
+      if (q.unit) h += `<span class="unit">${q.unit}</span>`;
       a.innerHTML = `<div class="expr">${h}</div>`;
+      a.querySelectorAll('[data-slot]').forEach(el => el.onclick = () => { if (locked) return; cur = +el.dataset.slot; render(); });
       const pad = document.createElement('div'); pad.className = 'pad pad4';
       ['7', '8', '9', '⌫', '4', '5', '6', '+', '1', '2', '3', '−', '0', '=', '✓'].forEach(k => { const b = btn(k, 'k' + (k === '✓' ? ' ok' : k === '⌫' ? ' del' : /[+−=]/.test(k) ? ' op' : '') + (k === '0' ? ' wide' : ''), () => key(k === '⌫' ? 'Backspace' : k === '✓' ? 'Enter' : k)); pad.appendChild(b); });
       r.appendChild(pad);
@@ -73,14 +76,21 @@ const QUI = (function () {
     if (input.length === q.answer.length) setTimeout(() => { if (!locked && input.length === q.answer.length) check(); }, 250);
   }
   function exprKey(k) {
-    const last = toks[toks.length - 1], isNum = t => t != null && /^\d+$/.test(t), hasEq = toks.includes('=');
     if (k === '-') k = '−';
-    if (/^[0-9]$/.test(k)) { if (isNum(last)) { if (last.length < 3) toks[toks.length - 1] = last === '0' ? k : last + k; } else toks.push(k); }
-    else if (k === '+' || k === '−') { if (hasEq) return; if (isNum(last)) { if (toks.filter(t => t === '+' || t === '−').length >= 2) return; toks.push(k); } else if (last === '+' || last === '−') toks[toks.length - 1] = k; }
-    else if (k === '=') { if (!hasEq && isNum(last) && toks.length >= 3) toks.push('='); }
-    else if (k === 'Backspace') { if (isNum(last) && last.length > 1) toks[toks.length - 1] = last.slice(0, -1); else toks.pop(); }
-    else if (k === 'Enter') { if (toks.length) check(); return; }
+    const kd = kinds[cur], v = slots[cur];
+    if (/^[0-9]$/.test(k)) {
+      if (kd === 'o') { fb('hint', '✏️ Ô này là dấu: bấm + hoặc −'); opHint = true; return; }
+      if (v.length < 3) slots[cur] = v === '0' ? k : v + k;
+    } else if (k === '+' || k === '−') {
+      if (kd === 'o') { slots[cur] = k; cur = Math.min(kinds.length - 1, cur + 1); }
+      else if (kd === 'n' && v && kinds[cur + 1] === 'o') { slots[cur + 1] = k; cur = cur + 2; }
+      else return;
+    } else if (k === '=' || k === 'Tab' || k === 'ArrowRight') { cur = k === '=' ? kinds.length - 1 : Math.min(kinds.length - 1, cur + 1); }
+    else if (k === 'ArrowLeft') cur = Math.max(0, cur - 1);
+    else if (k === 'Backspace') { if (v) slots[cur] = v.slice(0, -1); else if (cur > 0) { cur--; slots[cur] = slots[cur].slice(0, -1); } }
+    else if (k === 'Enter') { opHint = false; check(); return; }
     else return;
+    if (opHint) { opHint = false; fb('', '<span class="exh">✏️ Đọc đề rồi điền vào các ô: số, dấu (+ hoặc −), số và kết quả. Bấm vào ô để sửa.</span>'); }
     render();
   }
   function key(k) {
@@ -91,8 +101,10 @@ const QUI = (function () {
     if (q.input === 'number' && /^[0-9]$/.test(k) && input.length < 3) { input += k; render(); }
     else if (q.input === 'text' && /^[a-zA-Z]$/.test(k)) typeL(k.toLowerCase());
   }
-  function clear() { input = ''; toks = []; fixed = 0; if (q.input === 'text') { tiles.forEach(t => t.used = false); stack = []; } render(); }
+  function clear() { input = ''; toks = []; fixed = 0; if (q.input === 'expr') { slots = kinds.map(() => ''); cur = 0; } if (q.input === 'text') { tiles.forEach(t => t.used = false); stack = []; } render(); }
   function exprEval() {
+    if (slots.some(v => !v)) return { incomplete: true };
+    toks = kinds.flatMap((kd, i) => kd === 'r' ? ['=', slots[i]] : [slots[i]]);
     const c = q.calc, eqI = toks.indexOf('=');
     if (eqI < 0 || eqI === toks.length - 1) return { incomplete: true };
     const left = toks.slice(0, eqI), res = +toks[eqI + 1];
@@ -107,7 +119,7 @@ const QUI = (function () {
     let ok, ev = null;
     if (q.input === 'expr') {
       ev = exprEval();
-      if (ev.incomplete) { fb('hint', '✏️ Bé viết đủ phép tính, có dấu = và kết quả nhé!'); return; }
+      if (ev.incomplete) { cur = slots.findIndex(v => !v); render(); fb('hint', '✏️ Bé điền đủ tất cả các ô nhé!'); return; }
       ok = ev.exprOk && ev.resOk;
     } else ok = input.trim().toLowerCase() === q.answer.toLowerCase();
     if (ok) {
@@ -122,7 +134,7 @@ const QUI = (function () {
     markChoice(false);
     const p = $('#qp'); p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake');
     const why = ev ? (ev.exprOk ? 'Phép tính đúng rồi! Bé tính lại kết quả nhé. ' : ev.resOk ? 'Kết quả đúng rồi, nhưng phép tính chưa đúng. Bé đọc lại đề nhé! ' : '') : '';
-    const keepExpr = () => { if (ev && ev.exprOk) { toks = toks.slice(0, ev.eqI + 1); render(); } else clear(); };
+    const keepExpr = () => { if (ev && ev.exprOk) { slots[slots.length - 1] = ''; cur = slots.length - 1; render(); } else clear(); };
     if (attempts === 1) { fb('bad', why || L().tryAgain); keepExpr(); }
     else if (attempts === 2) {
       const h = q.subj === 'en' ? q.hintText : q.hint;
@@ -160,6 +172,6 @@ const QUI = (function () {
   }
   function selfCheck() { if ($('#selfOk')) return; const b = btn('✓ Said it!', 'k ok', () => { input = q.answer; check(); }); b.id = 'selfOk'; b.style.width = '140px'; $('#qPad').appendChild(b); }
   document.addEventListener('keydown', e => { if (!q || locked) return; key(e.key); if (e.key === 'Backspace') e.preventDefault(); });
-  return { show, speak: () => q && speak(q.say, q.sayLang), say: speak, setMuted: m => muted = m, key, get q() { return q; }, check, abort: () => { locked = true; q = null; }, solve: () => { if (q && !locked) { input = q.answer; if (q.calc) toks = q.calc.tokens.slice(); check(); } }, typeExpr: ks => ks.forEach(k => key(k)) };
+  return { show, speak: () => q && speak(q.say, q.sayLang), say: speak, setMuted: m => muted = m, key, get q() { return q; }, check, abort: () => { locked = true; q = null; }, solve: () => { if (q && !locked) { input = q.answer; if (q.calc) { slots = q.calc.tokens.filter(t => t !== '='); } check(); } }, typeExpr: ks => ks.forEach(k => key(k)) };
 })();
 export default QUI;

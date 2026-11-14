@@ -89,7 +89,9 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 .exl{font-weight:800;font-size:18px;color:#6b7891;margin-right:4px}
 .tok.n{min-width:62px;height:56px;border-radius:14px;background:#fff;box-shadow:0 0 0 3px #cfd9ea inset;display:inline-grid;place-items:center;padding:0 10px;color:var(--blue);font-size:34px;font-weight:800}
 .tok.n.cur{box-shadow:0 0 0 3px var(--pri) inset}.tok.n.blink::after{content:'';width:3px;height:30px;background:var(--pri);animation:bl 1s steps(1) infinite}
-.tok.o{font-size:36px;font-weight:800;color:var(--ink);padding:0 2px}
+.tok.op{width:56px;height:56px;border-radius:14px;background:#fff;box-shadow:0 0 0 3px #f2c6a8 inset;display:inline-grid;place-items:center;color:#e0561c;font-size:38px;font-weight:800;cursor:pointer}
+.tok.n{cursor:pointer}.tok.op.cur{box-shadow:0 0 0 3px var(--pri) inset;background:#fff3ea}.tok.op.blink::after{content:'';width:3px;height:30px;background:var(--pri);animation:bl 1s steps(1) infinite}
+.tok.eq{font-size:36px;font-weight:800;color:var(--ink);padding:0 2px}
 .exh{color:#6b7891;font-size:15px}
 .mic{width:104px;height:104px;border-radius:50%;background:linear-gradient(180deg,#ff8a5c,#ff5d3a);font-size:50px;box-shadow:0 6px 0 #d4461c}
 .mic.on{animation:pulse 1s infinite}@keyframes pulse{50%{box-shadow:0 0 0 18px #ff7a3d33,0 6px 0 #d4461c}}
