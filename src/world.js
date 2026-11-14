@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import * as MD from './models.js';
 import * as SC from './scenery.js';
-import { BIOMES } from './data.js';
+import { BIOMES, SEAT_KINDS, OUTFIT } from './data.js';
+const isSeat = () => SEAT_KINDS.includes(R.kind);
 import * as DC from './decor.js';
 const V3 = THREE.Vector3;
 const { mat, rbox, cyl, sign, gc } = MD;
@@ -216,14 +217,18 @@ function makeVehicle() {
   if (R.kind === 'train') { add(MD.steamLoco(paint.loco), 0); for (let k = 0; k < n; k++) add(MD.carriage(paint.cars[k % 4]), k === 0 ? 7.9 : 7.3); }
   else if (R.kind === 'metro') { for (let k = 0; k < n; k++) add(MD.metroCar(k === 0, R.st[R.st.length - 1].name, paint.metro), k === 0 ? 0 : k === 1 ? 11.6 : 10.3); }
   else if (R.kind === 'car') add(MD.car(paint.car), 0);
+  else if (R.kind === 'taxi') add(MD.taxi(), 0);
+  else if (R.kind === 'police') add(MD.policeCar(), 0);
+  else if (R.kind === 'ambulance') add(MD.ambulance(), 0);
+  else if (R.kind === 'fire') add(MD.fireTruck(), 0);
   else add(MD.truck(paint.truck[0], paint.truck[1]), 0);
   DC.applyDecor(parts, R.kind, decor);
   const off = []; let acc = 0; gaps.forEach(g => { acc += g; off.push(acc); });
-  R.veh_len = acc + (R.kind === 'car' ? 5 : R.kind === 'truck' ? 9 : 8);
+  R.veh_len = acc + ({ car: 5, taxi: 5, police: 5, ambulance: 6.2, fire: 10.5, truck: 9 }[R.kind] || 8);
   const v = { parts, off, s: 0, y: R.track === 'rail' ? 0.32 : R.track === 'metro' ? 0.2 : 0.05, slots: [] };
   for (let k = 0; k < n; k++) {
     if (R.kind === 'train' || R.kind === 'metro') { const part = parts[R.kind === 'train' ? k + 1 : k], oi = R.kind === 'train' ? k + 1 : k; v.slots.push({ dz: () => -off[oi], fill: on => MD.setFilled(part, on), filled: () => !!part.userData.filled }); }
-    else if (R.kind === 'car') { const car = parts[0], h = car.userData.seats[k % 4]; v.slots.push({ dz: () => 0, fill: on => { h.visible = on; }, filled: () => h.visible }); }
+    else if (isSeat()) { const car = parts[0], h = car.userData.seats[k % 4]; v.slots.push({ dz: () => 0, fill: on => { h.visible = on; }, filled: () => h.visible }); }
     else { const tr = parts[0], bed = tr.userData.bed, c = new THREE.Group(); tr.add(c); const z = n === 1 ? (bed.z0 + bed.z1) / 2 : bed.z0 + 0.9 + k * ((bed.z1 - bed.z0 - 1.8) / (n - 1)); c.position.set(0, bed.y, z); c.visible = false; v.slots.push({ dz: () => z, crate: c, fill: on => { c.visible = on; }, filled: () => c.visible }); }
   }
   return v;
@@ -301,11 +306,11 @@ W.prepareWaiters = function (stationIdx) {
     if (R.kind === 'truck') {
       const { p } = slotWorld(k, 9.5, (k - (R.slots - 1) / 2) * 0.2); const c = MD.crate(fame, [0xc8964f, 0xd9a35f, 0xb5803f][k % 3]); c.position.set(p.x, y, p.z); c.rotation.y = Math.atan2(T(R.veh.s).x, T(R.veh.s).z); world.add(c); grp.push(c);
     } else {
-      const cnt = R.kind === 'car' ? 1 : 3;
+      const cnt = isSeat() ? 1 : 3, of = OUTFIT[R.kind];
       for (let j = 0; j < cnt; j++) {
-        const pe = MD.person({ cloth: CLOTH[(k * 3 + j + stationIdx) % CLOTH.length], nonla: rural && j === 1 && R.kind !== 'car', bag: R.kind === 'car' ? 0xffd23f : (j === 2 ? 0x6d4c41 : null), cap: R.kind === 'car' && k % 2 ? 0xffffff : null });
-        const d = (R.track === 'road' ? 6.4 : R.track === 'metro' ? (R.st[stationIdx].under ? 5.2 : 5.0) : 4.6) + (j % 2) * 0.9, { p } = slotWorld(k, d, (j - 1) * 1.1);
-        pe.position.set(p.x, y, p.z); pe.scale.setScalar(R.kind === 'car' ? 0.95 : 0.85);
+        const pe = MD.person(of ? { ...of } : { cloth: CLOTH[(k * 3 + j + stationIdx) % CLOTH.length], nonla: rural && j === 1 && !isSeat(), bag: R.kind === 'car' ? 0xffd23f : R.kind === 'taxi' ? 0x8d6e63 : (j === 2 ? 0x6d4c41 : null), cap: R.kind === 'car' && k % 2 ? 0xffffff : null });
+        const d = (R.track === 'road' ? 6.4 : R.track === 'metro' ? (R.st[stationIdx].under ? 5.2 : 5.0) : 4.6) + (j % 2) * 0.9, { p } = slotWorld(k, d, isSeat() ? (k - (R.slots - 1) / 2) * 1.7 : (j - 1) * 1.1);
+        pe.position.set(p.x, y, p.z); pe.scale.setScalar(isSeat() ? 0.95 : 0.85);
         const sv = S(R.veh.s); pe.rotation.y = Math.atan2(-sv.x, -sv.z); world.add(pe); grp.push(pe);
       }
     }
@@ -324,7 +329,7 @@ W.board = function (k, done) {
     return;
   }
   grp.forEach((pe, j) => {
-    const d = R.track === 'road' ? 2.2 : 2.0, { p } = slotWorld(k, d, R.kind === 'car' ? 0 : 1.6); p.y = y + (R.track === 'rail' ? 0.4 : 0.1);
+    const d = R.track === 'road' ? 2.2 : 2.0, { p } = slotWorld(k, d, isSeat() ? 0 : 1.6); p.y = y + (R.track === 'rail' ? 0.4 : 0.1);
     pe.lookAt(p.x, pe.position.y, p.z);
     setTimeout(() => tween(pe, p, 1.1, { walk: true, shrink: true, done: () => { world.remove(pe); fin(); } }), j * 180);
   });
@@ -340,9 +345,9 @@ W.unload = function (done) {
       sl.fill(false); return;
     }
     sl.fill(false);
-    const cnt = R.kind === 'car' ? 1 : 2;
+    const cnt = isSeat() ? 1 : 2, of = OUTFIT[R.kind];
     for (let j = 0; j < cnt; j++) {
-      const pe = MD.person({ cloth: CLOTH[(k + j * 3) % CLOTH.length], bag: R.kind === 'car' ? 0xffd23f : null });
+      const pe = MD.person(of ? { ...of } : { cloth: CLOTH[(k + j * 3) % CLOTH.length], bag: R.kind === 'car' ? 0xffd23f : null });
       const { p } = slotWorld(k, 2.2, (j - 0.5) * 1.2); pe.position.set(p.x, y, p.z); pe.scale.setScalar(0.85); world.add(pe);
       const { p: q } = slotWorld(k, R.track === 'road' ? 14 : 10 + j, 6 + j * 2); q.y = y;
       pe.lookAt(q.x, y, q.z); tween(pe, q, 2.2, { walk: true, done: () => world.remove(pe) });
@@ -354,6 +359,7 @@ W.unload = function (done) {
 /* ================= driving ================= */
 W.drive = function (toS, opts = {}) { R.drive = { to: toS, v: R.drive?.v || 0, vmax: opts.vmax || 22, done: opts.done }; R.camMode = 'drive'; R.camT = 0; };
 W.headStopS = i => headStopS(i);
+W.speed = () => (R && R.drive ? R.drive.v : 0);
 W.redecorate = function (decor) {
   if (!R) return; R.opt.decor = decor;
   const s = R.veh.s, filled = R.veh.slots.map(sl => sl.filled());
@@ -461,7 +467,8 @@ function updateSmoke(dt, moving) {
   for (let i = smoke.length - 1; i >= 0; i--) { const o = smoke[i]; o.life -= dt * 0.6; o.m.position.y += dt * 2.6; o.m.position.x += o.vx * dt; o.m.position.z += o.vz * dt; o.m.scale.setScalar(0.5 + (1 - o.life) * 2); o.m.material.opacity = Math.max(0, o.life) * 0.7; if (o.life <= 0) { o.m.parent && o.m.parent.remove(o.m); o.m.material.dispose(); smoke.splice(i, 1); } }
 }
 function updateFx(dt, moving) {
-  updateSmoke(dt, moving); DC.animateDecor(R.veh.parts, performance.now() / 1000);
+  updateSmoke(dt, moving); const tt = performance.now() / 1000; DC.animateDecor(R.veh.parts, tt);
+  R.veh.parts.forEach(p => (p.userData.sirens || []).forEach(s => { s.m.emissiveIntensity = Math.sin(tt * 9 + s.ph) > 0 ? 2.6 : 0.15; }));
   if (R.boost && moving && fx.length < 80) {
     const p = R.veh.parts[R.veh.parts.length - 1].position, m = new THREE.Mesh(gc('spark', () => new THREE.OctahedronGeometry(0.35, 0)), mat([0xffd23f, 0xff70a6, 0x4cc9f0, 0xffffff][fx.length % 4], { emissive: 0xffffff, emissiveIntensity: 0.6 }));
     m.position.set(p.x + (Math.random() - 0.5) * 3, p.y + 1 + Math.random() * 3, p.z + (Math.random() - 0.5) * 3); world.add(m); fx.push({ m, life: 1 });

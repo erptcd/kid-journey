@@ -42,11 +42,17 @@ export const METRO = [
 METRO.forEach(s => s.region = s.town);
 
 export const VEHICLES = {
-  train: { name: 'Tàu hoả Bắc – Nam', short: 'Tàu hoả', emoji: '🚂', route: 'train', stop: 'Ga', slotWord: 'toa', ctx: 'tàu', track: 'rail' },
-  metro: { name: 'Metro số 1', short: 'Metro', emoji: '🚇', route: 'metro', stop: 'Ga', slotWord: 'toa', ctx: 'tàu điện', track: 'metro' },
-  car: { name: 'Ô tô đón bạn', short: 'Ô tô', emoji: '🚗', route: 'train', stop: 'Trạm', slotWord: 'bạn', ctx: 'xe', track: 'road' },
-  truck: { name: 'Xe tải chở đặc sản', short: 'Xe tải', emoji: '🚚', route: 'train', stop: 'Trạm', slotWord: 'thùng hàng', ctx: 'xe tải', track: 'road' }
+  train: { name: 'Tàu hoả Bắc – Nam', short: 'Tàu hoả', emoji: '🚂', route: 'train', stop: 'Ga', ctx: 'tàu', track: 'rail', slotTitle: 'Số toa (số câu mỗi ga)', slotName: 'Toa', kid: 'hành khách', icon: '🚃' },
+  metro: { name: 'Metro số 1', short: 'Metro', emoji: '🚇', route: 'metro', stop: 'Ga', ctx: 'tàu điện', track: 'metro', slotTitle: 'Số toa (số câu mỗi ga)', slotName: 'Toa', kid: 'hành khách', icon: '🚃' },
+  car: { name: 'Ô tô đón bạn', short: 'Ô tô', emoji: '🚗', route: 'train', stop: 'Trạm', ctx: 'xe', track: 'road', slotTitle: 'Số bạn cần đón mỗi trạm', slotName: 'Bạn', kid: 'bạn nhỏ', icon: '🧒' },
+  taxi: { name: 'Taxi chở khách', short: 'Taxi', emoji: '🚕', route: 'train', stop: 'Trạm', ctx: 'xe taxi', track: 'road', slotTitle: 'Số khách đón mỗi trạm', slotName: 'Khách', kid: 'hành khách', icon: '🧳' },
+  truck: { name: 'Xe tải chở đặc sản', short: 'Xe tải', emoji: '🚚', route: 'train', stop: 'Trạm', ctx: 'xe tải', track: 'road', slotTitle: 'Số thùng hàng mỗi trạm', slotName: 'Thùng hàng', kid: 'thùng hàng', icon: '📦' },
+  police: { name: 'Xe cảnh sát tuần tra', short: 'Cảnh sát', emoji: '🚓', route: 'train', stop: 'Trạm', ctx: 'xe cảnh sát', track: 'road', slotTitle: 'Số chú cảnh sát lên xe mỗi trạm', slotName: 'Chú cảnh sát', kid: 'chú cảnh sát', icon: '👮', siren: true },
+  ambulance: { name: 'Xe cứu thương', short: 'Cứu thương', emoji: '🚑', route: 'train', stop: 'Trạm', ctx: 'xe cứu thương', track: 'road', slotTitle: 'Số bác sĩ lên xe mỗi trạm', slotName: 'Bác sĩ', kid: 'bác sĩ', icon: '🩺', siren: true },
+  fire: { name: 'Xe cứu hoả', short: 'Cứu hoả', emoji: '🚒', route: 'train', stop: 'Trạm', ctx: 'xe cứu hoả', track: 'road', slotTitle: 'Số chú lính cứu hoả lên xe mỗi trạm', slotName: 'Lính cứu hoả', kid: 'chú lính cứu hoả', icon: '🧯', siren: true }
 };
+export const SEAT_KINDS = ['car', 'taxi', 'police', 'ambulance', 'fire'];
+export const OUTFIT = { police: { cloth: 0x2b4c8c, cap: 0x1d3557, pants: 0x1d3557 }, ambulance: { cloth: 0xffffff, cap: 0xffffff, pants: 0x90caf9 }, fire: { cloth: 0xe9a23b, cap: 0xd62828, pants: 0x5d4037 } };
 
 // Cảnh vật: màu đất + đồ vật rải theo mỗi đoạn 60 đơn vị: [loại, số lượng, khoảng cách gần, xa]
 export const BIOMES = {

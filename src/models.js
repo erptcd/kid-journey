@@ -298,3 +298,83 @@ export function metroStation(name) { // ga trên cao, gốc toạ độ = mặt 
   [-1, 1].forEach(sd => { const sg = sign(name, 5.2, 0.9, '#1565c0', '#fff'); sg.position.set(2.0, 4.2, sd * 7); sg.rotation.y = Math.PI / 2; g.add(sg); });
   return g;
 }
+
+/* ---------- xe ưu tiên: đèn còi nhấp nháy ---------- */
+function lightBar(p, y, z, w, cols = [0xff1f1f, 0x1f5bff]) {
+  const g = new THREE.Group(); g.position.set(0, y, z); p.add(g);
+  rbox(w, 0.16, 0.5, 0.06, 0x2b2d42, 0, 0.08, 0, g);
+  (p.userData.sirens = p.userData.sirens || []);
+  cols.forEach((c, i) => { const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1, roughness: 0.2, transparent: true, opacity: 0.92 }); const l = new THREE.Mesh(gc(`lens${w}`, () => new RoundedBoxGeometry(w / 2 - 0.08, 0.26, 0.42, 2, 0.1)), m); l.position.set((i ? 1 : -1) * w / 4, 0.29, 0); g.add(l); p.userData.sirens.push({ m, ph: i * Math.PI }); });
+  return g;
+}
+function seatHeads(g, pos, cap, k = 0.48) { return pos.map(([x, y, z]) => { const h = person({ headOnly: true, cap }); h.scale.setScalar(k); h.position.set(x, y, z); h.visible = false; g.add(h); return h; }); }
+export function policeCar() {
+  const g = car(0xf5f7fa);
+  g.userData.seats.forEach(h => g.remove(h));
+  g.userData.seats = seatHeads(g, [[-0.45, 1.46, -0.3], [0.5, 1.46, -1.3], [-0.5, 1.46, -1.3], [0, 1.46, -1.35]], 0x1d3557);
+  [-1, 1].forEach(sd => { rbox(0.06, 0.26, 3.6, 0.03, 0x1d4ed8, sd * 1.04, 0.72, 0.1, g); const l = sign('CẢNH SÁT', 2.0, 0.4, '#ffffff00', '#1d4ed8'); l.position.set(sd * 1.06, 1.02, -0.45); l.rotation.y = sd * Math.PI / 2; g.add(l); });
+  rbox(1.7, 0.07, 1.0, 0.03, 0x1d4ed8, 0, 1.235, 1.6, g);
+  lightBar(g, 1.99, -0.45, 1.3);
+  rbox(1.8, 0.35, 0.25, 0.08, 0x2b2d42, 0, 0.62, 2.5, g);
+  const ant = cyl(0.015, 0.015, 0.9, 4, 0x333333, g); ant.position.set(-0.6, 2.4, -1.6);
+  return g;
+}
+export function ambulance() {
+  const g = new THREE.Group(), WH = 0xf8f9fb, RED = 0xe53935;
+  rbox(2.0, 0.4, 5.6, 0.1, 0x2b2d42, 0, 0.75, 0, g);
+  g.add(profile([[0.9, 0.6], [2.75, 0.6], [2.9, 1.15], [2.65, 1.45], [1.75, 1.6], [1.3, 2.55], [0.9, 2.6]], 2.05, 0.14, WH));
+  const ws = profile([[1.74, 1.63], [1.33, 2.48], [0.98, 2.48], [0.98, 1.63]], 2.36, 0, GLASS()); ws.castShadow = false; g.add(ws);
+  rbox(2.36, 2.5, 3.8, 0.18, WH, 0, 1.9, -1.0, g);
+  rbox(2.4, 0.3, 3.84, 0.06, RED, 0, 1.25, -1.0, g); [-1, 1].forEach(sd => rbox(0.05, 0.3, 1.8, 0.03, RED, sd * 1.19, 1.25, 1.85, g));
+  [-1, 1].forEach(sd => { const w = rbox(0.06, 0.75, 1.5, 0.05, GLASS(), sd * 1.17, 2.4, -0.45, g); w.castShadow = false;
+    const c = sign('✚', 0.95, 0.95, '#ffffff', '#e53935'); c.position.set(sd * 1.2, 2.25, -2.0); c.rotation.y = sd * Math.PI / 2; g.add(c);
+    const t = sign('CẤP CỨU 115', 2.4, 0.38, '#ffffff00', '#e53935'); t.position.set(sd * 1.2, 1.62, -1.0); t.rotation.y = sd * Math.PI / 2; g.add(t); });
+  const back = sign('✚', 1.0, 1.0, '#ffffff', '#e53935'); back.position.set(0, 2.2, -2.92); g.add(back);
+  rbox(0.04, 2.0, 0.06, 0.02, 0x9e9e9e, 0, 1.9, -2.91, g);
+  lightBar(g, 2.6, 1.15, 1.6, [0xff1f1f, 0x1f5bff]);
+  rbox(2.1, 0.32, 0.3, 0.12, 0xdee2e6, 0, 0.6, 2.95, g);
+  [-0.65, 0.65].forEach(x => ball(0.15, mat(0xfff3b0, { emissive: 0xffe08a, emissiveIntensity: 1.3 }), x, 1.0, 2.88, g, 12).scale.set(1.3, 0.8, 0.5));
+  const driver = person({ cloth: 0xffffff, cap: 0xffffff }); driver.scale.setScalar(0.5); driver.position.set(0.45, 0.85, 1.35); g.add(driver);
+  g.userData.seats = seatHeads(g, [[-0.45, 1.62, 1.35], [0.5, 2.2, -0.45], [-0.5, 2.2, -0.45], [0, 2.2, -1.3]], 0xffffff, 0.5);
+  [1.9, -2.0].forEach(z => [-1.0, 1.0].forEach(x => wheel(0.48, 0.38, 0x222222, 0xced4da, x, 0.48, z, g, false)));
+  g.userData.meta = { hw: 1.18, roofY: 3.15, z0: -2.8, z1: 0.8, front: [0, 1.05, 2.97], flag: [0.95, 3.15, -2.5], star: [0, 3.15, -1.2], pet: [0.2, 3.15, -1.9] };
+  return g;
+}
+export function fireTruck() {
+  const g = new THREE.Group(), RED = 0xd62828, SIL = mat(0xcfd8dc, { metalness: 0.6, roughness: 0.3 });
+  rbox(2.2, 0.45, 10, 0.12, 0x2b2d42, 0, 1.0, 0, g);
+  g.add(profile([[1.9, 0.85], [5.0, 0.85], [5.15, 1.7], [5.05, 2.1], [1.9, 2.1]], 2.35, 0.16, RED));
+  const ws = profile([[2.0, 2.05], [5.05, 2.05], [4.85, 3.2], [2.0, 3.2]], 2.6, 0, GLASS()); ws.castShadow = false; g.add(ws);
+  g.add(profile([[1.9, 3.15], [4.9, 3.15], [4.82, 3.5], [1.9, 3.5]], 2.5, 0.12, RED));
+  [-1.32, 1.32].forEach(x => { rbox(0.16, 1.2, 0.16, 0.05, RED, x, 2.62, 3.45, g); const pl = rbox(0.16, 1.18, 0.16, 0.05, RED, x, 2.6, 4.95, g); pl.rotation.x = -0.17; });
+  rbox(2.68, 0.18, 10, 0.05, 0xffffff, 0, 1.6, 0, g);
+  rbox(2.6, 2.3, 6.7, 0.15, RED, 0, 2.15, -1.55, g);
+  [-1, 1].forEach(sd => {
+    for (let i = 0; i < 3; i++) { const z = -4.0 + i * 2.15; rbox(0.06, 1.5, 1.8, 0.04, SIL, sd * 1.31, 2.3, z, g); for (let y = 1.7; y < 3.0; y += 0.22) rbox(0.07, 0.04, 1.7, 0.01, 0x9aa5b1, sd * 1.33, y, z, g); }
+    const t = sign('CỨU HOẢ 114', 3.4, 0.42, '#ffffff00', '#ffffff'); t.position.set(sd * 1.33, 3.12, -1.55); t.rotation.y = sd * Math.PI / 2; g.add(t);
+    const reel = new THREE.Mesh(gc('reel', () => new THREE.TorusGeometry(0.42, 0.14, 8, 18)), mat(0xffc23d)); reel.position.set(sd * 1.38, 1.95, 1.2); reel.rotation.y = Math.PI / 2; g.add(reel);
+  });
+  // thang trên nóc
+  const lad = new THREE.Group(); lad.position.set(0, 3.55, -0.6); lad.rotation.x = -0.05; g.add(lad);
+  [-0.42, 0.42].forEach(x => rbox(0.1, 0.14, 8.4, 0.03, SIL, x, 0, 0, lad));
+  for (let z = -4; z <= 4; z += 0.5) rbox(0.84, 0.06, 0.06, 0.02, SIL, 0, 0, z, lad);
+  const tt = cyl(0.7, 0.8, 0.35, 16, SIL, g); tt.position.set(0, 3.42, -4.2);
+  const cannon = cyl(0.09, 0.12, 0.9, 8, SIL, g); cannon.position.set(0, 3.75, 1.0); cannon.rotation.x = Math.PI / 2.4;
+  lightBar(g, 3.52, 3.6, 2.0, [0xff1f1f, 0xff1f1f]);
+  rbox(2.6, 0.38, 0.38, 0.14, 0xdee2e6, 0, 0.75, 5.25, g);
+  for (let i = 0; i < 4; i++) rbox(1.6, 0.08, 0.08, 0.02, 0xdee2e6, 0, 1.25 + i * 0.14, 5.16, g);
+  [-0.85, 0.85].forEach(x => ball(0.19, mat(0xfff3b0, { emissive: 0xffe08a, emissiveIntensity: 1.3 }), x, 1.6, 5.13, g, 12).scale.set(1, 1, 0.5));
+  const driver = person({ cloth: 0xe9a23b, cap: 0xd62828 }); driver.scale.setScalar(0.58); driver.position.set(0.55, 1.65, 4.2); g.add(driver);
+  g.userData.seats = seatHeads(g, [[-0.55, 2.55, 4.2], [-0.62, 2.55, 2.75], [0.62, 2.55, 2.75], [0, 2.55, 2.75]], 0xd62828, 0.58);
+  [3.7, -1.9, -3.5].forEach(z => [-1.18, 1.18].forEach(x => wheel(0.62, 0.45, 0x222222, 0xced4da, x, 0.62, z, g, false)));
+  g.userData.meta = { hw: 1.3, roofY: 3.5, z0: 1.9, z1: 4.9, front: [0, 1.75, 5.32], flag: [1.05, 3.5, 2.1], star: [0, 3.5, 2.6], pet: [0.85, 3.27, 0.6] };
+  return g;
+}
+export function taxi() {
+  const g = car(0xffc61a);
+  const top = new THREE.Group(); top.position.set(0, 1.99, -0.5); g.add(top);
+  rbox(1.0, 0.36, 0.42, 0.08, 0xffffff, 0, 0.2, 0, top);
+  [-1, 1].forEach(sd => { const s = sign('TAXI', 0.9, 0.3, '#ffffff', '#22314f'); s.position.set(0, 0.2, sd * 0.215); if (sd < 0) s.rotation.y = Math.PI; top.add(s); });
+  [-1, 1].forEach(sd => { for (let i = 0; i < 8; i++) rbox(0.05, 0.12, 0.22, 0.02, i % 2 ? 0x22314f : 0xffffff, sd * 1.04, 0.8 + (i % 2 ? 0 : 0), -1.4 + i * 0.26, g); });
+  return g;
+}

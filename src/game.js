@@ -5,6 +5,7 @@ import { VN_OUTLINE } from './vnmap.js';
 import QB from './questions.js';
 import QUI from './ui.js';
 import { ITEMS, PAINTS } from './decor.js';
+import { sfx, audio, setMuted as sndMute, engineStart, engineStop, engineUpdate } from './sound.js';
 
 const $ = s => document.querySelector(s);
 const store = {
@@ -13,18 +14,8 @@ const store = {
 };
 
 /* ---------- âm thanh ---------- */
-let actx = null, muted = store.get('muted', false);
-function ac() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (actx.state === 'suspended') actx.resume().catch(() => { }); return actx; }
-function tone(f, dur, type = 'sine', vol = 0.15, delay = 0) { if (muted) return; const c = ac(); if (!c) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.05); }
-const sfx = {
-  tap() { tone(560, 0.05, 'square', 0.03); },
-  board() { [660, 880].forEach((f, i) => tone(f, 0.12, 'triangle', 0.12, i * 0.1)); },
-  horn(k) { if (k === 'train') [0, 0.6].forEach(d => { tone(392, 0.5, 'square', 0.05, d); tone(494, 0.5, 'square', 0.04, d); }); else if (k === 'metro') { tone(1250, 0.09, 'sine', 0.12); tone(1250, 0.09, 'sine', 0.12, 0.16); } else [0, 0.3].forEach(d => { tone(440, 0.22, 'sawtooth', 0.05, d); tone(554, 0.22, 'sawtooth', 0.04, d); }); },
-  stamp() { tone(140, 0.18, 'square', 0.12); tone(90, 0.25, 'sine', 0.2, 0.02); [784, 1047].forEach((f, i) => tone(f, 0.2, 'triangle', 0.12, 0.2 + i * 0.12)); },
-  boost() { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.14, 'square', 0.06, i * 0.06)); },
-  buy() { [988, 1319, 1568].forEach((f, i) => tone(f, 0.12, 'triangle', 0.14, i * 0.07)); },
-  win() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.32, 'triangle', 0.16, i * 0.13)); }
-};
+let muted = store.get('muted', false); sndMute(muted);
+const ac = audio;
 
 /* ---------- trạng thái ---------- */
 const MATH_TOPICS = [['all', '🌟 Trộn cả HK1'], ['C1', 'Ôn tập & bổ sung'], ['C2', 'Cộng, trừ trong 20'], ['C3', 'Kg và lít'], ['C4', 'Cộng, trừ có nhớ 100'], ['C5', 'Hình phẳng'], ['C6', 'Ngày, giờ, tháng']];
@@ -72,7 +63,7 @@ function renderMenu() {
     const ts = $('#enTopic'); ts.innerHTML = `<option value="all">All topics</option>` + Object.entries(QB.TOPIC_EN).map(([k, v]) => `<option value="${k}" ${S.enTopic === k ? 'selected' : ''}>${v}</option>`).join('');
     ts.onchange = () => { S.enTopic = ts.value; store.set('enTopic', S.enTopic); };
   }
-  const word = { train: 'Số toa (số câu mỗi ga)', metro: 'Số toa (số câu mỗi ga)', car: 'Số bạn cần đón mỗi trạm', truck: 'Số thùng hàng mỗi trạm' }[S.veh];
+  const word = VEHICLES[S.veh].slotTitle;
   $('#slotTitle').textContent = word;
   const sc = $('#slotChips'); sc.innerHTML = ''; [2, 3, 4].forEach(n => chip(sc, String(n), S.slots === n, () => { S.slots = n; store.set('slots', n); }));
   const key = S.veh + S.dir + startIdx() + S.slots;
@@ -86,14 +77,14 @@ function setupWorld() {
 // Khi có bảng menu/cửa hàng bên phải: dời khung hình để thấy phương tiện ở nửa trái
 function frameSide(on = true) { if (!on) return W.setShift(0, 0); if (innerWidth > 820) W.setShift(0, innerWidth * 0.2); else W.setShift(innerHeight * 0.22, 0); }
 function showMenu() {
-  S.mode = 'menu'; QUI.abort(); clearBonus();
+  S.mode = 'menu'; QUI.abort(); clearBonus(); engineStop();
   ['#hud', '#qp', '#fin', '#banner', '#mini', '#passport', '#shop'].forEach(s => $(s).classList.add('hidden'));
   $('#menu').classList.remove('hidden'); previewKey = ''; renderMenu();
 }
 
 /* ---------- chơi ---------- */
 function start() {
-  ac(); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false);
+  ac(); engineStart(S.veh); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false);
   setupWorld();
   $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden'); frameSide(false);
   drawMini(); renderHud();
@@ -106,7 +97,7 @@ function arriveAt(i, first) {
   giveStamp(x, () => {
     if (i >= S.route.length - 1) return finish();
     S.si = i; S.k = 0; renderHud();
-    QB.setContext({ veh: VEHICLES[S.veh].ctx, st: `${stopWord().toLowerCase()} ${S.route[i + 1].name}`, kid: { train: 'hành khách', metro: 'hành khách', car: 'bạn nhỏ', truck: 'thùng hàng' }[S.veh] });
+    QB.setContext({ veh: VEHICLES[S.veh].ctx, st: `${stopWord().toLowerCase()} ${S.route[i + 1].name}`, kid: VEHICLES[S.veh].kid });
     setTimeout(ask, first ? 600 : 300);
   });
 }
@@ -125,7 +116,7 @@ function ask() {
   showPanel();
   QUI.show(q, res => onAnswer(res));
 }
-function slotLabel(k) { return { train: `Toa ${k + 1}/${S.slots}`, metro: `Toa ${k + 1}/${S.slots}`, car: `Bạn ${k + 1}/${S.slots}`, truck: `Thùng hàng ${k + 1}/${S.slots}` }[S.veh]; }
+function slotLabel(k) { return `${VEHICLES[S.veh].slotName} ${k + 1}/${S.slots}`; }
 function showPanel() { const qp = $('#qp'); qp.classList.remove('hidden'); qp.style.animation = 'none'; void qp.offsetWidth; qp.style.animation = ''; requestAnimationFrame(() => W.setShift(qp.offsetHeight * 0.5)); }
 function hidePanel() { $('#qp').classList.add('hidden'); W.setShift(0); }
 function onAnswer(res) {
@@ -142,7 +133,7 @@ function depart() {
   sfx.horn(S.veh); W.setBoost(S.boostNext); if (S.boostNext) { $('#speedfx').classList.remove('hidden'); } S.boostNext = false;
   banner(`${VEHICLES[S.veh].emoji} Đang đến ${stationLabel(next)}…`, 2600);
   const f = S.info.feats.find(f => f.leg === i), target = W.headStopS(i + 1);
-  const goStation = () => W.drive(target, { done: () => { W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); }); } });
+  const goStation = () => W.drive(target, { done: () => { W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); sfx.brake(S.veh); W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); }); } });
   if (f) W.drive(f.s - 62, { done: () => bonus(f, goStation) }); else goStation();
 }
 /* ---------- câu thưởng ---------- */
@@ -176,7 +167,7 @@ function showPassport() {
 }
 /* ---------- kết thúc ---------- */
 function finish() {
-  S.mode = 'finish'; hidePanel();
+  S.mode = 'finish'; hidePanel(); engineStop();
   const gold = S.results.filter(r => r === 'gold').length, total = S.results.length;
   store.set('total', store.get('total', 0) + gold + S.bonus);
   const L = ordered(), endIdx = L.indexOf(S.route[S.route.length - 1]); store.set(progKey(), endIdx >= L.length - 1 ? 0 : endIdx); S.start = null;
@@ -235,7 +226,7 @@ function renderHud() {
   $('#hudRoute').innerHTML = nx ? `<b>${cur.emo} ${cur.name}</b> → ${nx.emo} ${nx.name} <small>(${S.si + 1}/${S.route.length - 1})</small>` : `<b>${cur.emo} ${cur.name}</b>`;
   const gold = S.results.filter(r => r === 'gold').length; $('#starPill').textContent = `⭐ ${gold + S.bonus}`;
   $('#streak').innerHTML = `🔥 ${'●'.repeat(S.streak % 3)}${'○'.repeat(3 - S.streak % 3)}`;
-  const sl = $('#slots'); sl.innerHTML = Array.from({ length: S.slots }, (_, k) => `<span class="${k < S.k ? 'on' : ''}">${{ train: '🚃', metro: '🚃', car: '🧒', truck: '📦' }[S.veh]}</span>`).join('');
+  const sl = $('#slots'); sl.innerHTML = Array.from({ length: S.slots }, (_, k) => `<span class="${k < S.k ? 'on' : ''}">${VEHICLES[S.veh].icon}</span>`).join('');
 }
 /* ---------- bản đồ thu nhỏ ---------- */
 const PX = lon => (lon - 102) * 13 + 4, PY = lat => (23.6 - lat) * 13 + 4;
@@ -282,7 +273,7 @@ $('#finShopBtn').onclick = () => { sfx.tap(); openShop('fin'); };
 $('#shopClose').onclick = () => { sfx.tap(); closeShop(); };
 const CAMS = [['auto', '🎥 Tự động'], ['chase', '🎥 Sau tàu'], ['side', '🎥 Bên hông'], ['high', '🎥 Trên cao']];
 $('#camBtn').onclick = () => { const i = (CAMS.findIndex(c => c[0] === S.camUser) + 1) % CAMS.length; S.camUser = CAMS[i][0]; W.setCamUser(S.camUser); $('#camBtn').title = CAMS[i][1]; banner(CAMS[i][1], 1000); };
-function setMute() { $('#muteBtn').textContent = muted ? '🔇' : '🔊'; QUI.setMuted(muted); }
+function setMute() { $('#muteBtn').textContent = muted ? '🔇' : '🔊'; QUI.setMuted(muted); sndMute(muted); }
 $('#muteBtn').onclick = () => { muted = !muted; store.set('muted', muted); setMute(); try { if (muted) speechSynthesis.cancel(); } catch (e) { } };
 $('#qListen').onclick = () => QUI.speak();
 document.addEventListener('keydown', e => { if (S.mode === 'menu' && e.key === 'Enter') start(); });
@@ -291,7 +282,7 @@ setMute();
 /* ---------- vòng lặp ---------- */
 W.init(document.getElementById('c'));
 let last = performance.now(), frames = 0;
-function loop(now) { const dt = Math.min(0.05, (now - last) / 1000) * (window.__ts || 1); last = now; W.update(dt, now / 1000); if (S.mode === 'play') updateMini(); frames++; requestAnimationFrame(loop); }
+function loop(now) { const dt = Math.min(0.05, (now - last) / 1000) * (window.__ts || 1); last = now; W.update(dt, now / 1000); if (S.mode === 'play') { updateMini(); engineUpdate(W.speed(), dt, !!VEHICLES[S.veh].siren); } frames++; requestAnimationFrame(loop); }
 window.__kj = { S, W, start, showMenu, frames: () => frames, QUI };
 const fontsReady = document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2500))]) : Promise.resolve();
 fontsReady.then(() => { $('#loading').remove(); showMenu(); requestAnimationFrame(loop); });
