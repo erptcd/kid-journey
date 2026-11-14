@@ -5,7 +5,7 @@ import { VN_OUTLINE } from './vnmap.js';
 import QB from './questions.js';
 import QUI from './ui.js';
 import { ITEMS, PAINTS } from './decor.js';
-import { sfx, audio, setMuted as sndMute, engineStart, engineStop, engineUpdate } from './sound.js';
+import { sfx, audio, setMuted as sndMute } from './sound.js';
 
 const $ = s => document.querySelector(s);
 const store = {
@@ -77,14 +77,14 @@ function setupWorld() {
 // Khi có bảng menu/cửa hàng bên phải: dời khung hình để thấy phương tiện ở nửa trái
 function frameSide(on = true) { if (!on) return W.setShift(0, 0); if (innerWidth > 820) W.setShift(0, innerWidth * 0.2); else W.setShift(innerHeight * 0.22, 0); }
 function showMenu() {
-  S.mode = 'menu'; QUI.abort(); clearBonus(); engineStop();
+  S.mode = 'menu'; QUI.abort(); clearBonus();
   ['#hud', '#qp', '#fin', '#banner', '#mini', '#passport', '#shop'].forEach(s => $(s).classList.add('hidden'));
   $('#menu').classList.remove('hidden'); previewKey = ''; renderMenu();
 }
 
 /* ---------- chơi ---------- */
 function start() {
-  ac(); engineStart(S.veh); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false);
+  ac(); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false);
   setupWorld();
   $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden'); frameSide(false);
   drawMini(); renderHud();
@@ -130,10 +130,10 @@ function onAnswer(res) {
 function depart() {
   if (S.mode !== 'play') return;
   const i = S.si, next = S.route[i + 1];
-  sfx.horn(S.veh); W.setBoost(S.boostNext); if (S.boostNext) { $('#speedfx').classList.remove('hidden'); } S.boostNext = false;
+  W.setBoost(S.boostNext); if (S.boostNext) { $('#speedfx').classList.remove('hidden'); } S.boostNext = false;
   banner(`${VEHICLES[S.veh].emoji} Đang đến ${stationLabel(next)}…`, 2600);
   const f = S.info.feats.find(f => f.leg === i), target = W.headStopS(i + 1);
-  const goStation = () => W.drive(target, { done: () => { W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); sfx.brake(S.veh); W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); }); } });
+  const goStation = () => W.drive(target, { done: () => { W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); }); } });
   if (f) W.drive(f.s - 62, { done: () => bonus(f, goStation) }); else goStation();
 }
 /* ---------- câu thưởng ---------- */
@@ -167,7 +167,7 @@ function showPassport() {
 }
 /* ---------- kết thúc ---------- */
 function finish() {
-  S.mode = 'finish'; hidePanel(); engineStop();
+  S.mode = 'finish'; hidePanel();
   const gold = S.results.filter(r => r === 'gold').length, total = S.results.length;
   store.set('total', store.get('total', 0) + gold + S.bonus);
   const L = ordered(), endIdx = L.indexOf(S.route[S.route.length - 1]); store.set(progKey(), endIdx >= L.length - 1 ? 0 : endIdx); S.start = null;
@@ -282,7 +282,7 @@ setMute();
 /* ---------- vòng lặp ---------- */
 W.init(document.getElementById('c'));
 let last = performance.now(), frames = 0;
-function loop(now) { const dt = Math.min(0.05, (now - last) / 1000) * (window.__ts || 1); last = now; W.update(dt, now / 1000); if (S.mode === 'play') { updateMini(); engineUpdate(W.speed(), dt, !!VEHICLES[S.veh].siren); } frames++; requestAnimationFrame(loop); }
+function loop(now) { const dt = Math.min(0.05, (now - last) / 1000) * (window.__ts || 1); last = now; W.update(dt, now / 1000); if (S.mode === 'play') updateMini(); frames++; requestAnimationFrame(loop); }
 window.__kj = { S, W, start, showMenu, frames: () => frames, QUI };
 const fontsReady = document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2500))]) : Promise.resolve();
 fontsReady.then(() => { $('#loading').remove(); showMenu(); requestAnimationFrame(loop); });
