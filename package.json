@@ -1,0 +1,8 @@
+{
+  "name": "kid-journey",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hành Trình Bé Giỏi – game 3D học Toán lớp 2 và tiếng Anh Starters trên các chuyến tàu Việt Nam",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "esbuild": "^0.28.2", "three": "0.170.0" }
+}
