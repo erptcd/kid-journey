@@ -131,3 +131,17 @@ let E = null, tok = 0;
 export function engineStart(kind) { engineStop(); const c = audio(); if (!c) return; const my = ++tok; loadSounds(c).then(m => { READY.set(c, m); if (my === tok) E = makeEngine(kind, c, master, c.currentTime); }); }
 export function engineStop() { tok++; if (E && ctx) E.stop(ctx.currentTime); E = null; }
 export function engineUpdate(v, dt, sirenOn) { if (E && ctx) E.update(v, dt, ctx.currentTime, sirenOn); }
+/* ---------- tiếng vòi nước xịt (nhiễu trắng lọc) ---------- */
+let SP = null;
+export function spray(on) {
+  const c = audio(); if (!c) return;
+  if (!SP) { const s = c.createBufferSource(); s.buffer = noise(c); s.loop = true; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 700; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 0.5; const g = c.createGain(); g.gain.value = 0; s.connect(hp); hp.connect(bp); bp.connect(g); g.connect(master); s.start(); SP = { s, g, bp }; }
+  SP.g.gain.setTargetAtTime(on && !muted ? 0.32 : 0, c.currentTime, on ? 0.05 : 0.12);
+  if (on) SP.bp.frequency.setTargetAtTime(2000 + Math.random() * 800, c.currentTime, 0.3);
+}
+export const sfx2 = {
+  coin() { const c = audio(); if (c && !muted) [1319, 1760].forEach((f, i) => osc(c, master, 'square', f, now() + i * 0.07, 0.005, 0.05, 0.12)); },
+  bump() { const c = audio(); if (!c || muted) return; osc(c, master, 'sine', 110, now(), 0.005, 0.25, 0.25); burst(c, master, now(), 0.15, 0.2, 'lowpass', 600); },
+  cheer() { const c = audio(); if (c && !muted) [784, 988, 1175, 1568].forEach((f, i) => osc(c, master, 'triangle', f, now() + i * 0.08, 0.01, 0.12, 0.16)); },
+  alarm() { const c = audio(); if (c && !muted) [0, 0.35].forEach(d => { osc(c, master, 'square', 880, now() + d, 0.01, 0.05, 0.15); osc(c, master, 'square', 660, now() + d + 0.17, 0.01, 0.05, 0.15); }); }
+};

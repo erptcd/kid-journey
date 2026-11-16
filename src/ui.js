@@ -3,7 +3,7 @@ import QB from './questions.js';
 const QUI = (function () {
   'use strict';
   const $ = s => document.querySelector(s);
-  let q = null, input = '', toks = [], slots = [], kinds = [], cur = 0, opHint = false, attempts = 0, locked = false, tiles = [], stack = [], fixed = 0, onDone = null, muted = false;
+  let q = null, input = '', toks = [], slots = [], kinds = [], cur = 0, opHint = false, attempts = 0, locked = false, tiles = [], stack = [], fixed = 0, onDone = null, muted = false, heard = '', micMsg = '', showAdult = false;
   const T = {
     vi: { tryAgain: 'Chưa đúng rồi, bé thử lại nhé! 💪', hint: '💡 ', reveal: a => `Đáp án là <b>${a}</b>. Mình nhớ nhé!`, next: 'Đi tiếp ➜', ok: ['Chính xác! 🎉', 'Giỏi quá! 🌟', 'Tuyệt vời! 👏', 'Đúng rồi! 🎈'], listen: '🔊 Nghe' },
     en: { tryAgain: 'Oops! Try again! 💪', hint: '💡 ', reveal: a => `The answer is <b>${a}</b>.`, next: 'Next ➜', ok: null, listen: '🔊 Listen' }
@@ -14,7 +14,7 @@ const QUI = (function () {
     try { const s = speechSynthesis; s.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = lang.startsWith('en') ? 0.8 : 0.95; const v = s.getVoices().find(v => (v.lang || '').toLowerCase().replace('_', '-').startsWith(lang.slice(0, 2))); if (v) u.voice = v; s.speak(u); } catch (e) { }
   }
   function show(question, done) {
-    q = question; onDone = done; input = ''; toks = []; attempts = 0;
+    q = question; onDone = done; input = ''; toks = []; attempts = 0; heard = ''; micMsg = ''; showAdult = false;
     if (q.input === 'expr') { kinds = q.calc.nums.flatMap((_, i) => i ? ['o', 'n'] : ['n']).concat('r'); slots = kinds.map(() => ''); cur = 0; } locked = false; fixed = 0;
     if (q.input === 'text') {
       const letters = q.answer.split(''), abc = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(c => !letters.includes(c));
@@ -65,7 +65,9 @@ const QUI = (function () {
       r.append(tw, ta);
     } else if (q.input === 'speak') {
       const m = btn('🎤', 'mic', listen); m.id = 'micBtn'; r.appendChild(m);
-      const lab = document.createElement('div'); lab.className = 'miclab'; lab.id = 'micLab'; lab.textContent = 'Tap and say the word'; r.appendChild(lab);
+      const lab = document.createElement('div'); lab.className = 'miclab'; lab.id = 'micLab'; lab.innerHTML = micMsg || (heard ? `I heard: “${heard}”` : 'Tap 🎤 and say the word'); r.appendChild(lab);
+      const say = btn('🔊 Nghe mẫu', 'k sm', () => speak(q.answer, 'en-US')); say.id = 'sayModel'; r.appendChild(say);
+      if (showAdult) adultBtn();
     }
   }
   function btn(t, cls, fn) { const b = document.createElement('button'); b.className = cls; b.textContent = t; b.onclick = fn; return b; }
@@ -148,30 +150,61 @@ const QUI = (function () {
       const b = btn(L().next, 'next', () => onDone && onDone('miss')); $('#qFb').appendChild(b);
       if (q.subj === 'en') speak(q.answer, 'en-US');
     }
+    if (q.input === 'speak' && attempts < 3) { showAdult = true; adultBtn(); setTimeout(() => speak(q.answer, 'en-US'), 700); }
   }
   function markChoice(ok) {
     if (q.input !== 'choice') return;
     document.querySelectorAll('#qAnswer .choice').forEach((b, i) => { const c = q.choices[i]; if (c === input) b.classList.add(ok ? 'right' : 'wrong'); });
   }
-  /* ---- speaking ---- */
-  function listen() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition, lab = $('#micLab'), mb = $('#micBtn');
-    if (!SR) { lab.innerHTML = 'Speech check is not available in this browser. Say the word aloud, then a grown-up taps ✓.'; selfCheck(); return; }
-    let r; try { r = new SR(); } catch (e) { selfCheck(); return; }
-    r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 5;
-    mb.classList.add('on'); lab.textContent = 'Listening…';
-    r.onresult = e => {
-      const alts = Array.from(e.results[0]).map(a => a.transcript.toLowerCase().trim());
-      const hit = alts.some(a => a.split(/\s+/).some(w => w.replace(/[^a-z]/g, '') === q.answer || w.replace(/[^a-z]/g, '') === q.answer + 's'));
-      lab.textContent = `I heard: “${alts[0]}”`;
-      input = hit ? q.answer : alts[0] || '?'; check();
-    };
-    r.onerror = e => { mb.classList.remove('on'); lab.innerHTML = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'The microphone is blocked here. Say the word aloud, then a grown-up taps ✓.' : 'I could not hear you. Tap 🎤 and try again.'; if (e.error === 'not-allowed' || e.error === 'service-not-allowed') selfCheck(); };
-    r.onend = () => mb.classList.remove('on');
-    try { r.start(); } catch (e) { selfCheck(); }
+  /* ---- speaking: so khớp dễ, lỗi micro/mạng không tính là sai ---- */
+  const norm = w => (w || '').toLowerCase().replace(/[^a-z]/g, '');
+  function lev(a, b) { const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i]); for (let j = 1; j <= n; j++) d[0][j] = j; for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; }
+  const SAME = { two: ['to', 'too', 'tu'], four: ['for', 'fore', 'four'], eight: ['ate'], one: ['won', 'wan'], pear: ['pair', 'pare', 'bear'], sea: ['see', 'c'], bee: ['be', 'b'], eye: ['i', 'aye'], tea: ['tee', 't'], pea: ['pee', 'p'], ball: ['bowl', 'bol'], bus: ['bass', 'boss'], cat: ['cut', 'cad', 'kat'], dog: ['dock', 'doug'], fish: ['fis', 'fees'], car: ['card', 'ca', 'cart'], cow: ['how', 'kow'], hat: ['hut', 'had'], bike: ['bite', 'pike'], train: ['trend', 'trains'], plane: ['plain', 'blame'], egg: ['ag', 'eg'], bed: ['bad', 'bet'], red: ['read', 'rat'], blue: ['blew', 'bloo'], night: ['knight'], right: ['write'], son: ['sun'], sun: ['son'], flower: ['flour'], tail: ['tale'], mouse: ['mouth'], horse: ['hoarse', 'house'], sheep: ['ship', 'cheap'], three: ['tree', 'free'], tree: ['three', 'free'], kite: ['kites', 'light'], goat: ['coat', 'god'] };
+  function heardOk(alts, ans) {
+    const A = norm(ans);
+    for (const alt of alts) {
+      const ws = alt.split(/\s+/).map(norm).filter(Boolean); if (!ws.length) continue;
+      if (ws.join('').includes(A)) return true;
+      const cand = ws.concat(ws.slice(1).map((w, i) => ws[i] + w));
+      for (const w of cand) {
+        if (w === A || w === A + 's' || w === A + 'es' || A === w + 's' || (SAME[A] || []).includes(w)) return true;
+        const tol = A.length <= 3 ? (w[0] === A[0] ? 1 : 0) : A.length <= 6 ? 1 : 2;
+        if (Math.abs(w.length - A.length) <= 2 && lev(w, A) <= tol) return true;
+      }
+    }
+    return false;
   }
-  function selfCheck() { if ($('#selfOk')) return; const b = btn('✓ Said it!', 'k ok', () => { input = q.answer; check(); }); b.id = 'selfOk'; b.style.width = '140px'; $('#qPad').appendChild(b); }
+  function micNote(html) { micMsg = html; const l = $('#micLab'); if (l) l.innerHTML = html; }
+  function listen() {
+    if (locked) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mb = $('#micBtn');
+    if (!SR) { micNote('Máy/trình duyệt này chưa nghe được tiếng nói (dùng Chrome hoặc Edge). Bé đọc to, rồi người lớn bấm nút bên dưới.'); showAdult = true; adultBtn(); return; }
+    if (location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) { micNote('Micro chỉ chạy khi mở game qua https (link GitHub Pages). Người lớn bấm nút bên dưới khi bé đọc đúng.'); showAdult = true; adultBtn(); return; }
+    let r; try { r = new SR(); } catch (e) { showAdult = true; adultBtn(); return; }
+    r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 5;
+    let got = false, err = '';
+    mb.classList.add('on'); micNote('Listening… 👂');
+    r.onresult = e => {
+      got = true;
+      const alts = Array.from(e.results[0]).map(a => a.transcript.toLowerCase().trim()).filter(Boolean);
+      heard = alts[0] || ''; micMsg = '';
+      if (!heard) return;
+      const ok = heardOk(alts, q.answer);
+      input = ok ? q.answer : heard; check();
+      if (!ok) { micNote(`I heard: “${heard}”. Listen and try again! 🔊`); }
+    };
+    r.onerror = e => {
+      err = e.error; mb.classList.remove('on'); showAdult = true; adultBtn();
+      if (err === 'not-allowed' || err === 'service-not-allowed') micNote('Micro đang bị chặn. Người lớn bấm biểu tượng 🔒 trên thanh địa chỉ → <b>Micro: Cho phép</b>, rồi bấm 🎤 lại.');
+      else if (err === 'network') micNote('Máy cần mạng Internet để nghe tiếng nói. Bé đọc to, người lớn bấm nút bên dưới.');
+      else if (err === 'audio-capture') micNote('Không thấy micro. Kiểm tra micro rồi bấm 🎤 lại nhé.');
+      else micNote('I could not hear you. Tap 🎤 and say it again! (Không tính là sai)');
+    };
+    r.onend = () => { mb.classList.remove('on'); if (!got && !err) { micNote('I could not hear you. Tap 🎤 and say it louder! (Không tính là sai)'); showAdult = true; adultBtn(); } };
+    try { r.start(); } catch (e) { mb.classList.remove('on'); showAdult = true; adultBtn(); }
+  }
+  function adultBtn() { if (!q || q.input !== 'speak' || $('#selfOk')) return; const b = btn('👂 Người lớn: bé đọc đúng ✓', 'k ok adult', () => { if (locked) return; input = q.answer; check(); }); b.id = 'selfOk'; $('#qPad').appendChild(b); }
   document.addEventListener('keydown', e => { if (!q || locked) return; key(e.key); if (e.key === 'Backspace') e.preventDefault(); });
-  return { show, speak: () => q && speak(q.say, q.sayLang), say: speak, setMuted: m => muted = m, key, get q() { return q; }, check, abort: () => { locked = true; q = null; }, solve: () => { if (q && !locked) { input = q.answer; if (q.calc) { slots = q.calc.tokens.filter(t => t !== '='); } check(); } }, typeExpr: ks => ks.forEach(k => key(k)) };
+  return { show, speak: () => q && speak(q.say, q.sayLang), say: speak, setMuted: m => muted = m, key, get q() { return q; }, check, abort: () => { locked = true; q = null; }, heardOk, solve: () => { if (q && !locked) { input = q.answer; if (q.calc) { slots = q.calc.tokens.filter(t => t !== '='); } check(); } }, typeExpr: ks => ks.forEach(k => key(k)) };
 })();
 export default QUI;

@@ -5,7 +5,7 @@ import { VN_OUTLINE } from './vnmap.js';
 import QB from './questions.js';
 import QUI from './ui.js';
 import { ITEMS, PAINTS } from './decor.js';
-import { sfx, audio, setMuted as sndMute, engineStart, engineStop, engineUpdate } from './sound.js';
+import { sfx, sfx2, spray as sndSpray, audio, setMuted as sndMute, engineStart, engineStop, engineUpdate } from './sound.js';
 
 const $ = s => document.querySelector(s);
 const store = {
@@ -23,7 +23,8 @@ const EN_TYPES = [['e_write', 'Look and write'], ['e_howmany', 'How many?'], ['e
 const S = {
   veh: store.get('veh', 'train'), dir: store.get('dir', 1), legs: store.get('legs', 3), slots: store.get('slots', 3),
   subj: store.get('subj', 'math'), mathT: store.get('mathT', ['all']), enT: store.get('enT', EN_TYPES.map(t => t[0])), enTopic: store.get('enTopic', 'all'),
-  start: null, mode: 'menu', route: [], si: 0, k: 0, results: [], bonus: 0, streak: 0, boostNext: false, usedQ: new Set(), lastGen: '', camUser: 'auto', newStamps: []
+  start: null, mode: 'menu', route: [], si: 0, k: 0, results: [], bonus: 0, streak: 0, boostNext: false, usedQ: new Set(), lastGen: '', camUser: 'auto', newStamps: [],
+  coins: 0, mStars: 0, carry: null, missionLegs: [], steer: null, inMission: null, usedRev: new Set()
 };
 const baseList = () => VEHICLES[S.veh].route === 'metro' ? METRO : TRAIN;
 const ordered = () => S.dir > 0 ? baseList() : baseList().slice().reverse();
@@ -37,6 +38,7 @@ function chip(parent, label, sel, fn, cls = 'chip') { const b = document.createE
 let previewKey = '';
 function renderMenu() {
   $('#total').textContent = '⭐ ' + store.get('total', 0);
+  $('#reviewBtn').textContent = `📝 ${store.get('review', []).length}`;
   $('#stampCount').textContent = `📖 ${store.get('stamps', []).length}`;
   const vl = $('#vehList'); vl.innerHTML = '';
   Object.entries(VEHICLES).forEach(([k, v]) => chip(vl, `<span class="em">${v.emoji}</span><span class="nm">${v.short}</span><span class="sub">${v.name}</span>`, S.veh === k, () => { S.veh = k; S.start = null; store.set('veh', k); }, 'opt'));
@@ -71,20 +73,23 @@ function renderMenu() {
 }
 function setupWorld() {
   S.route = routeStations();
-  const info = W.setup({ kind: S.veh, stations: S.route, slots: S.slots, legLen: 300, seed: 11 + startIdx() * 97 + (S.dir > 0 ? 0 : 5), dir: S.dir, stopWord: stopWord(), decor: equipped() });
+  const info = W.setup({ kind: S.veh, stations: S.route, slots: S.slots, legLen: 300, seed: 11 + startIdx() * 97 + (S.dir > 0 ? 0 : 5), dir: S.dir, stopWord: stopWord(), decor: equipped(), missions: S.mode === 'play' ? S.missionLegs : [] });
   S.info = info; W.prepareWaiters(0); W.setCamBoard(); frameSide();
 }
 // Khi có bảng menu/cửa hàng bên phải: dời khung hình để thấy phương tiện ở nửa trái
 function frameSide(on = true) { if (!on) return W.setShift(0, 0); if (innerWidth > 820) W.setShift(0, innerWidth * 0.2); else W.setShift(innerHeight * 0.22, 0); }
 function showMenu() {
-  S.mode = 'menu'; QUI.abort(); clearBonus(); engineStop();
-  ['#hud', '#qp', '#fin', '#banner', '#mini', '#passport', '#shop'].forEach(s => $(s).classList.add('hidden'));
+  S.mode = 'menu'; QUI.abort(); clearBonus(); engineStop(); setSteer(null); hideMissionBtn(); S.inMission = null; S.carry = null; try { W.endMission(); W.clearFun(); } catch (e) { }
+  ['#hud', '#qp', '#fin', '#banner', '#mini', '#passport', '#shop', '#review'].forEach(s => $(s).classList.add('hidden'));
   $('#menu').classList.remove('hidden'); previewKey = ''; renderMenu();
 }
 
 /* ---------- chơi ---------- */
 function start() {
-  ac(); engineStart(S.veh); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false);
+  ac(); engineStart(S.veh); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false); S.coins = 0; S.mStars = 0; S.carry = null; S.inMission = null; S.usedRev = new Set();
+  S.missionLegs = [];
+  if (VEHICLES[S.veh].siren) { const n = routeStations().length - 1; for (let i = 0; i < n; i++) if (Math.random() < 0.3) S.missionLegs.push(i); if (!S.missionLegs.length && n >= 2) S.missionLegs.push(1 + Math.floor(Math.random() * (n - 1))); }
+  if (window.__forceMissions) S.missionLegs = window.__forceMissions.slice(); // dùng cho test.js
   setupWorld();
   $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden'); frameSide(false);
   drawMini(); renderHud();
@@ -101,7 +106,21 @@ function arriveAt(i, first) {
     setTimeout(ask, first ? 600 : 300);
   });
 }
-function pickQuestion() {
+function allGens() { return [...QB.math, ...QB.english]; }
+function similar(q0) {
+  const g = allGens().find(x => x.id === q0.id); if (!g) return pickQuestion(true);
+  let q, n = 0; do { q = g.gen({ topic: S.enTopic }); n++; } while (q && q.prompt + q.answer === q0.prompt + q0.answer && n < 12);
+  return q;
+}
+function reviewPick() {
+  if (!store.get('reviewOn', false) || Math.random() >= 0.35) return null;
+  const L = store.get('review', []).filter(e => e.q.subj === S.subj && !S.usedRev.has(e.key));
+  if (!L.length) return null;
+  const e = L[Math.floor(Math.random() * L.length)]; S.usedRev.add(e.key);
+  return Object.assign({}, e.q, { _rev: e.key });
+}
+function pickQuestion(noReview) {
+  if (!noReview) { const r = reviewPick(); if (r) return r; }
   let pool;
   if (S.subj === 'math') pool = QB.math.filter(t => S.mathT.includes('all') || S.mathT.includes(t.topic.split(' · ')[0]));
   else pool = QB.english.filter(t => S.enT.includes(t.id));
@@ -109,33 +128,153 @@ function pickQuestion() {
   do { g = pool[Math.floor(Math.random() * pool.length)]; if (pool.length > 1 && g.id === S.lastGen && n < 5) { n++; continue; } q = g.gen({ topic: S.enTopic }); n++; } while ((!q || S.usedQ.has(q.prompt + q.answer)) && n < 25);
   S.lastGen = g.id; S.usedQ.add(q.prompt + q.answer); return q;
 }
-function ask() {
+function ask(retryOf) {
   if (S.mode !== 'play') return;
-  const q = pickQuestion();
-  $('#qTopic').textContent = `${slotLabel(S.k)} · ${q.subj === 'math' ? q.topic.split(' · ')[1] : 'Starters · ' + q.topic}`;
+  const q = retryOf ? similar(retryOf) : pickQuestion();
+  $('#qTopic').textContent = `${retryOf ? '🔁 Câu tương tự · ' : q._rev ? '📝 Ôn lại · ' : ''}${slotLabel(S.k)} · ${q.subj === 'math' ? q.topic.split(' · ')[1] : 'Starters · ' + q.topic}`;
   showPanel();
-  QUI.show(q, res => onAnswer(res));
+  QUI.show(q, res => onAnswer(res, q));
 }
 function slotLabel(k) { return `${VEHICLES[S.veh].slotName} ${k + 1}/${S.slots}`; }
 function showPanel() { const qp = $('#qp'); qp.classList.remove('hidden'); qp.style.animation = 'none'; void qp.offsetWidth; qp.style.animation = ''; requestAnimationFrame(() => W.setShift(qp.offsetHeight * 0.5)); }
 function hidePanel() { $('#qp').classList.add('hidden'); W.setShift(0); }
-function onAnswer(res) {
+function onAnswer(res, q) {
   if (S.mode !== 'play') return;
-  S.results.push(res);
-  if (res === 'gold') { S.streak++; if (S.streak % 3 === 0) { S.boostNext = true; banner('🔥 Đúng 3 câu liền! Chặng tới được TĂNG TỐC!', 2200); sfx.boost(); } } else S.streak = 0;
+  S.results.push(res); noteReview(q, res);
+  if (res === 'miss') { // sai 3 lần: không lên khách, phải làm câu tương tự
+    S.streak = 0; renderHud(); hidePanel();
+    banner('💪 Mình làm một câu tương tự nhé!', 1800);
+    setTimeout(() => ask(q), 900); return;
+  }
+  if (res === 'gold') { S.streak++; if (S.streak % 3 === 0) { S.boostNext = true; setTimeout(() => { banner('🔥 Đúng 3 câu liền! Chặng tới được TĂNG TỐC!', 2200); sfx.boost(); }, 900); } } else S.streak = 0;
   renderHud(); hidePanel();
-  sfx.board();
-  W.board(S.k, () => { S.k++; renderHud(); if (S.k < S.slots) setTimeout(ask, 350); else setTimeout(depart, 500); });
+  celebrate(res);
+  W.cheer(S.k);
+  setTimeout(() => { sfx.board(); W.board(S.k, () => { S.k++; renderHud(); if (S.k < S.slots) setTimeout(ask, 350); else setTimeout(depart, 500); }); }, 950);
+}
+const PRAISE = ['Bé giỏi quá! 🎉', 'Tuyệt vời! 🌟', 'Đúng rồi, siêu ghê! 👏', 'Khách vui lắm! 🎈', 'Hoan hô bé! 🥳'];
+function celebrate(res) {
+  sfx2.cheer(); burstConfetti(36);
+  const pr = $('#praise'); pr.textContent = res === 'gold' ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Làm đúng rồi! 👍'; pr.classList.remove('hidden'); pr.style.animation = 'none'; void pr.offsetWidth; pr.style.animation = '';
+  setTimeout(() => pr.classList.add('hidden'), 1300);
+  if (res === 'gold') flyStar(innerWidth / 2, innerHeight * 0.55);
+}
+function flyStar(x, y, txt = '⭐') {
+  const t = $('#starPill').getBoundingClientRect(), d = document.createElement('div'); d.className = 'flystar'; d.textContent = txt;
+  d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d);
+  requestAnimationFrame(() => requestAnimationFrame(() => { d.style.left = (t.left + t.width / 2) + 'px'; d.style.top = (t.top + t.height / 2) + 'px'; d.style.transform = 'translate(-50%,-50%) scale(.5)'; d.style.opacity = '.3'; }));
+  setTimeout(() => { d.remove(); const p = $('#starPill'); p.classList.remove('pop'); void p.offsetWidth; p.classList.add('pop'); }, 750);
+}
+function burstConfetti(n) { const c = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#ff924c']; for (let i = 0; i < n; i++) { const d = document.createElement('div'); d.className = 'confetti burst'; d.style.left = (35 + Math.random() * 30) + 'vw'; d.style.top = '45vh'; d.style.background = c[i % 6]; d.style.setProperty('--dx', ((Math.random() - 0.5) * 70) + 'vw'); d.style.setProperty('--dy', (-20 - Math.random() * 40) + 'vh'); d.style.animationDuration = (1.2 + Math.random() * 0.8) + 's'; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); } }
+/* ---------- sổ câu sai ---------- */
+const plain = h => String(h || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+function noteReview(q, res) {
+  if (!q) return;
+  const L = store.get('review', []), key = q._rev || (q.id + '|' + plain(q.prompt) + '|' + q.answer), i = L.findIndex(e => e.key === key);
+  if (res === 'gold') { if (i >= 0) { L[i].ok = (L[i].ok || 0) + 1; if (L[i].ok >= 2) L.splice(i, 1); store.set('review', L); } return; }
+  const qq = Object.assign({}, q); delete qq._rev;
+  if (i >= 0) { L[i].wrong++; L[i].ok = 0; L[i].t = Date.now(); } else L.unshift({ key, q: qq, wrong: 1, ok: 0, t: Date.now() });
+  store.set('review', L.slice(0, 60));
+}
+function showReview() {
+  const L = store.get('review', []);
+  $('#rvOn').checked = store.get('reviewOn', false);
+  $('#rvBody').innerHTML = L.length ? L.map(e => { const q = e.q, ans = q.calc ? q.calc.text : q.answer + (q.unit ? ' ' + q.unit : ''); return `<div class="rv-item"><span class="rv-s">${q.subj === 'math' ? '➕' : '🔤'}</span><div class="rv-q"><div>${plain(q.prompt).slice(0, 160) || q.topic}${q.eq ? ' ' + plain(q.eq) : ''}</div><div class="rv-a">Đáp án: <b>${ans}</b> · <small>${q.topic}</small></div></div><span class="rv-n">sai ${e.wrong}<br><small>đúng ${e.ok || 0}/2</small></span></div>`; }).join('') : '<p style="font-weight:700">Chưa có câu sai nào. Bé giỏi quá! 🌟</p>';
+  $('#rvClear').textContent = 'Xoá sổ'; $('#review').classList.remove('hidden');
 }
 function depart() {
   if (S.mode !== 'play') return;
-  const i = S.si, next = S.route[i + 1];
+  const i = S.si, next = S.route[i + 1], road = VEHICLES[S.veh].track === 'road';
   sfx.horn(S.veh); W.setBoost(S.boostNext); if (S.boostNext) { $('#speedfx').classList.remove('hidden'); } S.boostNext = false;
-  banner(`${VEHICLES[S.veh].emoji} Đang đến ${stationLabel(next)}…`, 2600);
-  const f = S.info.feats.find(f => f.leg === i), target = W.headStopS(i + 1);
-  const goStation = () => W.drive(target, { done: () => { W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); sfx.brake(S.veh); W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); }); } });
-  if (f) W.drive(f.s - 62, { done: () => bonus(f, goStation) }); else goStation();
+  banner(`${VEHICLES[S.veh].emoji} Đang đến ${stationLabel(next)}…`, 2400);
+  if (i === 0) setTimeout(() => S.mode === 'play' && banner(road ? '◀ ▶ Bé lái xe nhặt ⭐, tránh trâu, cọc, ổ gà nhé!' : '✨ Chạm vào ⭐ bên đường để nhặt sao!', 3200), 2500);
+  const f = S.info.feats.find(f => f.leg === i), target = W.headStopS(i + 1), mS = S.missionLegs.includes(i) ? W.missionS(i) : null;
+  W.spawnFun(W.vehS() + 22, target - 40, { avoid: [f && f.s, mS].filter(x => x != null), emoji: next.emo });
+  const stops = [];
+  if (mS != null) stops.push({ s: mS, fn: c => mission(c) });
+  if (f) stops.push({ s: f.s - 62, fn: c => bonus(f, c) });
+  stops.sort((a, b) => a.s - b.s);
+  const driveTo = (s, done) => { setSteer(road ? 'lanes' : null); W.drive(s, { fun: true, done: () => { setSteer(null); done(); } }); };
+  const goStation = () => driveTo(target, () => {
+    W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); sfx.brake(S.veh); W.clearFun();
+    const unload = () => W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); });
+    if (S.carry) { const t = S.carry; S.carry = null; banner(t === 'police' ? '👨‍👩‍👧 Bé lạc đã gặp lại bố mẹ!' : '💐 Người nhà đón người bệnh!', 2000); W.meetFamily(t, () => { S.mStars += 2; renderHud(); sfx2.cheer(); burstConfetti(30); flyStar(innerWidth / 2, innerHeight / 2, '💖'); banner('💖 Người nhà cảm ơn bé! +2 ⭐', 2200); setTimeout(unload, 900); }); }
+    else unload();
+  });
+  const step = () => { if (S.mode !== 'play') return; const nx = stops.shift(); if (!nx) return goStation(); driveTo(nx.s, () => nx.fn(step)); };
+  step();
 }
+/* ---------- nhiệm vụ xe ưu tiên ---------- */
+const MISSION_TXT = {
+  fire: { start: '🔥 Có cháy! Giữ 💦 để phun nước, ◀ ▶ hoặc kéo ngón tay để ngắm', done: '💦 Bé dập tắt hết đám cháy! +3 ⭐', stars: 3 },
+  ambulance: { start: '🚑 Có người bị ốm bên đường! Bấm vào người bệnh để đón', btn: '🚑 Đón người bệnh', picked: '🚑 Đã đón người bệnh! Mình chở tới trạm sau nhé' },
+  police: { start: '🚓 Có bé bị lạc đang khóc! Bấm vào bé để giúp', btn: '🚓 Giúp bé lạc', picked: '🚓 Đã đón bé lạc! Mình đưa bé tới trạm sau gặp bố mẹ nhé' }
+};
+let missionCont = null;
+function mission(cont) {
+  if (S.mode !== 'play') return;
+  const type = S.veh, T = MISSION_TXT[type]; S.inMission = type; missionCont = cont;
+  sfx2.alarm(); W.setupMission(type); banner(T.start, 3600);
+  if (type === 'fire') { setSteer('fire'); setTimeout(() => { const m = W.mission(); if (S.inMission === 'fire' && m && m.left) banner(`🔥 Còn ${m.left} đám cháy`, 60000); }, 3700); }
+  else { const b = $('#missionBtn'); b.textContent = T.btn; b.classList.remove('hidden'); }
+}
+function hideMissionBtn() { $('#missionBtn').classList.add('hidden'); }
+function missionEnd(stars, txt) {
+  const cont = missionCont; missionCont = null; S.inMission = null;
+  if (stars) { S.mStars += stars; renderHud(); flyStar(innerWidth / 2, innerHeight / 2, '🏅'); }
+  sfx2.cheer(); burstConfetti(40); banner(txt, 2600);
+  setTimeout(() => { W.endMission(); if (S.mode === 'play' && cont) cont(); }, 2200);
+}
+W.onEvt = (t, d) => {
+  if (S.mode !== 'play') return;
+  if (t === 'coin') { S.coins += d.n; renderHud(); sfx2.coin(); flyStar(d.x, d.y, d.kind === 'gift' ? '🎁' : '⭐'); }
+  else if (t === 'bump') { sfx2.bump(); banner({ buffalo: '🐃 Ối, con trâu! Lái tránh nhé', cone: '🚧 Cẩn thận cọc chắn đường!', hole: '🕳️ Ổ gà! Xe chậm lại rồi' }[d.kind], 1500); }
+  else if (t === 'fireLeft' && S.inMission === 'fire') { if (d.n > 0) banner(`🔥 Còn ${d.n} đám cháy`, 60000); }
+  else if (t === 'missionDone') { setSteer(null); setSpray(false); missionEnd(MISSION_TXT.fire.stars, MISSION_TXT.fire.done); }
+  else if (t === 'picked') { hideMissionBtn(); S.carry = d.type; missionEnd(0, MISSION_TXT[d.type].picked); }
+};
+/* ---------- điều khiển: ◀ ▶, 💦, vuốt, kéo ngón ---------- */
+function setSteer(mode) {
+  S.steer = mode; const el = $('#steer');
+  el.classList.toggle('hidden', !mode); el.dataset.mode = mode || '';
+  $('#sprayBtn').classList.toggle('hidden', mode !== 'fire');
+  if (mode !== 'fire') { setSpray(false); W.missionSteer(0); }
+}
+function setSpray(on) { W.spray(on); sndSpray(!!on && S.steer === 'fire'); $('#sprayBtn').classList.toggle('on', !!on && S.steer === 'fire'); }
+function steerBtn(el, dir) {
+  el.addEventListener('pointerdown', e => { e.preventDefault(); if (S.steer === 'lanes') W.steer(dir); else if (S.steer === 'fire') W.missionSteer(dir); el.classList.add('on'); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, () => { el.classList.remove('on'); if (S.steer === 'fire') W.missionSteer(0); }));
+}
+steerBtn($('#stL'), -1); steerBtn($('#stR'), 1);
+$('#sprayBtn').addEventListener('pointerdown', e => { e.preventDefault(); setSpray(true); });
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('#sprayBtn').addEventListener(ev, () => setSpray(false)));
+$('#missionBtn').onclick = () => { sfx.tap(); W.missionTap(0, 0, true); hideMissionBtn(); };
+{
+  const cv = document.getElementById('c'); let p0 = null, drag = false;
+  cv.addEventListener('pointerdown', e => {
+    if (S.mode !== 'play') return;
+    if (S.steer === 'fire') { drag = true; cv.setPointerCapture(e.pointerId); W.missionAim(e.clientX, e.clientY); setSpray(true); return; }
+    p0 = { x: e.clientX, y: e.clientY, t: performance.now() };
+  });
+  cv.addEventListener('pointermove', e => { if (drag && S.steer === 'fire') W.missionAim(e.clientX, e.clientY); });
+  const up = e => {
+    if (drag) { drag = false; setSpray(false); return; }
+    if (!p0 || S.mode !== 'play') return; const dx = e.clientX - p0.x, dy = e.clientY - p0.y; p0 = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && S.steer === 'lanes') { W.steer(dx > 0 ? 1 : -1); return; }
+    if (Math.hypot(dx, dy) < 25) { if (W.tapAt(e.clientX, e.clientY) && S.inMission && S.inMission !== 'fire') hideMissionBtn(); }
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', () => { if (drag) { drag = false; setSpray(false); } p0 = null; });
+}
+document.addEventListener('keydown', e => {
+  if (S.mode !== 'play' || !S.steer) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const d = e.key === 'ArrowLeft' ? -1 : 1; if (S.steer === 'lanes') { if (!e.repeat) W.steer(d); } else W.missionSteer(d); e.preventDefault(); }
+  if (e.key === ' ' && S.steer === 'fire') { setSpray(true); e.preventDefault(); }
+});
+document.addEventListener('keyup', e => {
+  if (S.steer !== 'fire') return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') W.missionSteer(0);
+  if (e.key === ' ') setSpray(false);
+});
 /* ---------- câu thưởng ---------- */
 let bonusTimer = null;
 function clearBonus() { clearInterval(bonusTimer); bonusTimer = null; $('#bonusBar').classList.add('hidden'); }
@@ -168,12 +307,13 @@ function showPassport() {
 /* ---------- kết thúc ---------- */
 function finish() {
   S.mode = 'finish'; hidePanel(); engineStop();
-  const gold = S.results.filter(r => r === 'gold').length, total = S.results.length;
-  store.set('total', store.get('total', 0) + gold + S.bonus);
+  const gold = S.results.filter(r => r === 'gold').length, total = S.results.length, extra = S.bonus + S.coins + S.mStars;
+  store.set('total', store.get('total', 0) + gold + extra);
   const L = ordered(), endIdx = L.indexOf(S.route[S.route.length - 1]); store.set(progKey(), endIdx >= L.length - 1 ? 0 : endIdx); S.start = null;
   $('#finStars').textContent = '⭐'.repeat(gold) + '☆'.repeat(total - gold) + (S.bonus ? '  +' + '🌟'.repeat(S.bonus) : '');
+  $('#finExtra').innerHTML = [S.coins ? `✨ Nhặt dọc đường: <b>${S.coins}</b> ⭐` : '', S.mStars ? `🏅 Nhiệm vụ: <b>${S.mStars}</b> ⭐` : ''].filter(Boolean).join(' · ');
   const r = total ? gold / total : 0;
-  $('#finMsg').textContent = r === 1 ? 'Hoàn hảo! Bé đúng hết ngay lần đầu! 🏆' : r >= 0.6 ? `Giỏi lắm! Bé được ${gold + S.bonus} sao.` : `Bé được ${gold + S.bonus} sao. Chơi tiếp để giỏi hơn nhé!`;
+  $('#finMsg').textContent = r === 1 ? `Hoàn hảo! Bé đúng hết ngay lần đầu! 🏆 Được ${gold + extra} sao.` : r >= 0.6 ? `Giỏi lắm! Bé được ${gold + extra} sao.` : `Bé được ${gold + extra} sao. Chơi tiếp để giỏi hơn nhé!`;
   $('#finWallet').textContent = `Bé đang có ${store.get('total', 0)} ⭐ để mua đồ trang trí`;
   $('#finStamps').innerHTML = S.newStamps.length ? `<div class="fs-t">Tem mới:</div><div class="stamps small">${S.newStamps.map(x => stampHtml(x, true)).join('')}</div>` : '';
   const nx = L[store.get(progKey(), 0)];
@@ -215,7 +355,7 @@ function renderShop(msg) {
     };
     g.appendChild(d);
   });
-  $('#shopMsg').textContent = msg || 'Mỗi câu đúng ngay lần đầu được 1 ⭐. Dùng sao để trang trí phương tiện!';
+  $('#shopMsg').textContent = msg || 'Câu đúng ngay lần đầu, câu thưởng, sao nhặt dọc đường và nhiệm vụ đều cho ⭐. Dùng sao để trang trí phương tiện!';
 }
 
 /* ---------- HUD ---------- */
@@ -224,7 +364,7 @@ function banner(t, ms) { const b = $('#banner'); b.textContent = t; b.classList.
 function renderHud() {
   const cur = S.route[S.si], nx = S.route[S.si + 1];
   $('#hudRoute').innerHTML = nx ? `<b>${cur.emo} ${cur.name}</b> → ${nx.emo} ${nx.name} <small>(${S.si + 1}/${S.route.length - 1})</small>` : `<b>${cur.emo} ${cur.name}</b>`;
-  const gold = S.results.filter(r => r === 'gold').length; $('#starPill').textContent = `⭐ ${gold + S.bonus}`;
+  const gold = S.results.filter(r => r === 'gold').length; $('#starPill').textContent = `⭐ ${gold + S.bonus + S.coins + S.mStars}`;
   $('#streak').innerHTML = `🔥 ${'●'.repeat(S.streak % 3)}${'○'.repeat(3 - S.streak % 3)}`;
   const sl = $('#slots'); sl.innerHTML = Array.from({ length: S.slots }, (_, k) => `<span class="${k < S.k ? 'on' : ''}">${VEHICLES[S.veh].icon}</span>`).join('');
 }
@@ -268,6 +408,10 @@ holdButton($('#menuBtn'), 2000, () => { sfx.tap(); showMenu(); }, '🔒 Phụ hu
 $('#ppBtn').onclick = () => { sfx.tap(); showPassport(); };
 $('#stampCount').onclick = () => { sfx.tap(); showPassport(); };
 $('#ppClose').onclick = () => $('#passport').classList.add('hidden');
+$('#reviewBtn').onclick = () => { sfx.tap(); showReview(); };
+$('#rvClose').onclick = () => { $('#review').classList.add('hidden'); renderMenu(); };
+$('#rvOn').onchange = () => store.set('reviewOn', $('#rvOn').checked);
+$('#rvClear').onclick = () => { const b = $('#rvClear'); if (b.textContent !== 'Bấm lần nữa để xoá') { b.textContent = 'Bấm lần nữa để xoá'; return; } store.set('review', []); showReview(); };
 $('#shopBtn').onclick = () => { sfx.tap(); openShop('menu'); };
 $('#finShopBtn').onclick = () => { sfx.tap(); openShop('fin'); };
 $('#shopClose').onclick = () => { sfx.tap(); closeShop(); };
@@ -283,6 +427,6 @@ setMute();
 W.init(document.getElementById('c'));
 let last = performance.now(), frames = 0;
 function loop(now) { const dt = Math.min(0.05, (now - last) / 1000) * (window.__ts || 1); last = now; W.update(dt, now / 1000); if (S.mode === 'play') { updateMini(); engineUpdate(W.speed(), dt, !!VEHICLES[S.veh].siren); } frames++; requestAnimationFrame(loop); }
-window.__kj = { S, W, start, showMenu, frames: () => frames, QUI };
+window.__kj = { S, W, start, showMenu, frames: () => frames, QUI, store, setSpray };
 const fontsReady = document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2500))]) : Promise.resolve();
 fontsReady.then(() => { $('#loading').remove(); showMenu(); requestAnimationFrame(loop); });

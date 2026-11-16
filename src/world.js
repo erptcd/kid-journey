@@ -117,7 +117,7 @@ W.setup = function (opt) {
   world = new THREE.Group(); scene.add(world); persist = new THREE.Group(); world.add(persist);
   const st = opt.stations, n = st.length - 1, legLen = opt.legLen || 300, rng = rngOf(opt.seed || 7);
   const track = opt.kind === 'train' ? 'rail' : opt.kind === 'metro' ? 'metro' : 'road';
-  R = { opt, st, n, legLen, track, kind: opt.kind, slots: opt.slots, trackHalf: track === 'road' ? 5.2 : 3.4, chunks: new Map(), spins: [], bobs: [], tweens: [], stationS: [], feats: [], anim: [], camMode: 'board', camUser: 'auto', boost: 0, waiters: [], delivered: [] };
+  R = { opt, st, n, legLen, track, kind: opt.kind, slots: opt.slots, trackHalf: track === 'road' ? 5.2 : 3.4, chunks: new Map(), spins: [], bobs: [], tweens: [], stationS: [], feats: [], anim: [], camMode: 'board', camUser: 'auto', boost: 0, waiters: [], delivered: [], lat: 0, latT: 0, lane: 0, items: [], jumps: [], fly: [], mission: null, funOn: false };
   const pad0 = 80;
   for (let i = 0; i <= n; i++) R.stationS.push(pad0 + i * legLen);
   for (let i = 0; i < n; i++) { const a = st[i], b = st[i + 1], f = (opt.dir < 0 ? b : a).feat; const sf = R.stationS[i] + legLen * 0.55; if (f && !(track === 'metro' && f === 'tunnel')) R.feats.push({ type: f, s: sf, leg: i }); }
@@ -129,6 +129,9 @@ W.setup = function (opt) {
   }
   path = makePath(n, legLen, [...R.stationS, ...R.feats.map(f => f.s)], rng, yProf);
   R.space = makeSpace();
+  // chừa trống khu nhiệm vụ (đám cháy, người bệnh, bé lạc) và chỗ đặt máy quay
+  R.missionAt = (opt.missions || []).map(i => W.missionS(i));
+  R.missionAt.forEach(sm => R.space.blockStrip(sm - 32, sm + 32, -48, 26));
   R.ctx = makeCtx(persist, rngOf((opt.seed || 7) * 31));
   // ground colour target
   R.groundCol = new THREE.Color(BIOMES[st[0].town].ground); ground.material.color.copy(R.groundCol);
@@ -234,9 +237,10 @@ function makeVehicle() {
   return v;
 }
 function placeVehicle(s, ds) {
-  const v = R.veh, a = new V3(), b = new V3();
+  const v = R.veh, a = new V3(), b = new V3(), lo = R.lat || 0, lb = lo + ((R.latT || 0) - lo) * 0.35;
   v.parts.forEach((p, i) => {
-    const ss = s - v.off[i]; P(ss, a); P(ss + 1.5, b);
+    const ss = s - v.off[i];
+    if (lo || lb) { at(ss, lo, a).y = P(ss).y; at(ss + 1.5, lb, b).y = P(ss + 1.5).y; } else { P(ss, a); P(ss + 1.5, b); }
     p.position.set(a.x, a.y + v.y, a.z); p.lookAt(b.x, b.y + v.y, b.z);
     (p.userData.wheels || []).forEach(w => { w.o.rotation.x += ds / w.r; });
     if (p.userData.update) p.userData.update(s / 0.72);
@@ -357,7 +361,7 @@ W.unload = function (done) {
 };
 
 /* ================= driving ================= */
-W.drive = function (toS, opts = {}) { R.drive = { to: toS, v: R.drive?.v || 0, vmax: opts.vmax || 22, done: opts.done }; R.camMode = 'drive'; R.camT = 0; };
+W.drive = function (toS, opts = {}) { R.drive = { to: toS, v: R.drive?.v || 0, vmax: opts.vmax || 22, done: opts.done }; R.camMode = 'drive'; R.camT = 0; R.funOn = !!opts.fun; };
 W.headStopS = i => headStopS(i);
 W.speed = () => (R && R.drive ? R.drive.v : 0);
 W.redecorate = function (decor) {
@@ -382,6 +386,13 @@ const SHOTS = ['chase', 'side', 'high', 'front', 'chase', 'aerial'];
 function camTarget(dt) {
   const v = R.veh, lead = v.parts[0], mid = v.s - R.veh_len / 2, pm = P(mid), t = T(v.s), sv = S(v.s), tun = isTunnel(v.s) || isTunnel(mid);
   const pos = new V3(), look = new V3();
+  if (R.camMode === 'mission' && R.mission) {
+    const m = R.mission, c = P(m.s), tm = T(m.s), sm = S(m.s), port = innerWidth / innerHeight < 0.8, fire = m.type === 'fire';
+    const back = fire ? (port ? 36 : 20) : (port ? 24 : 17), hh = fire ? (port ? 16 : 10) : (port ? 14 : 10);
+    pos.copy(c).addScaledVector(sm, -back).addScaledVector(tm, fire ? -2 : 2).add(new V3(0, hh, 0));
+    look.copy(c).addScaledVector(sm, fire ? 7 : 4).addScaledVector(tm, fire ? 0 : 2.5).add(new V3(0, 1.5, 0));
+    return { pos, look, k: 2 };
+  }
   if (R.camMode === 'board') {
     const under = R.track === 'metro' && P(mid).y < -1.5;
     const dist = under ? 15.5 : 15 + R.veh_len * 0.4 + (R.track === 'road' ? 5 : 0), h = under ? 5.5 : 7 + R.veh_len * 0.12;
@@ -391,6 +402,7 @@ function camTarget(dt) {
     return { pos, look, k: 1.6 };
   }
   let shot = R.camUser === 'auto' ? SHOTS[Math.floor(R.camT / 7) % SHOTS.length] : R.camUser;
+  if (R.track === 'road' && R.funOn) shot = 'chase'; // bé lái xe: luôn nhìn từ sau xe để ◀ ▶ đúng hướng
   if (tun) shot = 'tunnel';
   const lp = lead.position;
   if (shot === 'chase') { pos.copy(lp).addScaledVector(t, -20).add(new V3(0, 9, 0)); look.copy(lp).addScaledVector(t, 10).add(new V3(0, 2, 0)); }
@@ -413,7 +425,9 @@ W.update = function (dt, time) {
     d.v = Math.min(vmax, d.v + acc * dt, Math.sqrt(Math.max(0, 2 * acc * 0.9 * rem)) + 0.6);
     const step = Math.min(rem, d.v * dt);
     placeVehicle(v.s + step, step); v.s += step; moving = true; R.camT += dt;
-    if (rem - step < 0.02) { v.s = d.to; d.v = 0; const cb = d.done; R.drive = null; cb && cb(); }
+    if (R.track === 'road' && rem < 45) { R.latT = 0; R.lane = 0; }
+    R.lat += (R.latT - R.lat) * (1 - Math.exp(-dt * 6));
+    if (rem - step < 0.02) { v.s = d.to; d.v = 0; R.funOn = false; if (Math.abs(R.lat) < 0.3) { R.lat = R.latT = 0; R.lane = 0; placeVehicle(v.s, 0); } const cb = d.done; R.drive = null; cb && cb(); }
   }
   ensureChunks(v.s);
   // anims
@@ -429,6 +443,7 @@ W.update = function (dt, time) {
   R.spins.forEach(s => { s.o.rotation[s.axis] += s.v * dt; });
   R.bobs.forEach(b => { b.o.position.y = b.y + Math.sin(time * 1.6 + b.ph) * 0.18; b.o.rotation.z = Math.sin(time + b.ph) * 0.05; });
   updateFx(dt, moving);
+  updateFun(dt, time, moving);
   // ground colour by zone
   const want = new THREE.Color(BIOMES[biomeAt(v.s)].ground); R.groundCol.lerp(want, 1 - Math.exp(-dt * 0.8)); ground.material.color.copy(R.groundCol);
   // underground / tunnel atmosphere
@@ -476,3 +491,203 @@ function updateFx(dt, moving) {
   for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.life -= dt * 1.2; f.m.position.y += dt * 1.5; f.m.rotation.y += dt * 4; f.m.scale.setScalar(Math.max(0.01, f.life)); if (f.life <= 0) { f.m.parent && f.m.parent.remove(f.m); fx.splice(i, 1); } }
 }
 W.renderer = () => renderer;
+
+/* ================= phần thưởng khi xe chạy: lái đổi làn, nhặt sao, tránh vật cản ================= */
+// Sự kiện gửi ra game.js: W.onEvt(type, data) – 'coin' {n, x, y}, 'bump' {kind}, 'fireLeft' {n}, 'missionDone' {type}, 'picked' {type}
+W.onEvt = () => { };
+const emit = (t, d) => { try { W.onEvt(t, d || {}); } catch (e) { console.error(e); } };
+const LANE = 2.7;
+const STAR_MAT = () => mat(0xffd23f, { emissive: 0xffb703, emissiveIntensity: 0.55, metalness: 0.3, roughness: 0.35 });
+function starGeo() {
+  return gc('star5', () => { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.42 : 1, a = Math.PI / 2 + i * Math.PI / 5; const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? sh.lineTo(x, y) : sh.moveTo(x, y); } sh.closePath(); const g = new THREE.ExtrudeGeometry(sh, { depth: 0.3, bevelEnabled: true, bevelSize: 0.08, bevelThickness: 0.08, bevelSegments: 1 }); g.center(); return g; });
+}
+function makeStar(k = 0.75) { const m = new THREE.Mesh(starGeo(), STAR_MAT()); m.scale.setScalar(k); m.castShadow = true; return m; }
+function screenOf(o) { const p = new V3(); o.getWorldPosition(p); p.project(camera); return { x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight, z: p.z }; }
+W.spawnFun = function (a, b, opt = {}) {
+  clearItems();
+  const road = R.track === 'road', avoid = opt.avoid || [], rng = Math.random;
+  const ok = s => !avoid.some(x => Math.abs(x - s) < 50) && !R.stationS.some(x => Math.abs(x - s) < 40);
+  let lastObs = -99;
+  for (let s = a; s < b; s += road ? 13 + rng() * 6 : 16 + rng() * 8) {
+    if (!ok(s)) continue;
+    if (road) {
+      const r = rng();
+      if (r < 0.26 && s - lastObs > 24) {
+        lastObs = s; const lane = Math.floor(rng() * 3) - 1, kind = ['buffalo', 'cone', 'hole'][Math.floor(rng() * 3)];
+        addItem(kind, s, lane * LANE);
+        const free = [-1, 0, 1].filter(l => l !== lane); addItem('star', s + 1, free[Math.floor(rng() * 2)] * LANE);
+      } else if (r < 0.38) addItem('gift', s, (Math.floor(rng() * 3) - 1) * LANE, opt.emoji);
+      else { const lane = Math.floor(rng() * 3) - 1; addItem('star', s, lane * LANE); if (rng() < 0.5) addItem('star', s + 3.2, lane * LANE); }
+    } else addItem('star', s, (rng() < 0.5 ? -1 : 1) * (3.6 + rng() * 1.4));
+  }
+};
+function addItem(kind, s, d, emoji) {
+  const p = at(s, d), y0 = P(s).y; p.y = y0; let o;
+  if (kind === 'star') { o = makeStar(R.track === 'road' ? 0.7 : 0.95); p.y += R.track === 'road' ? 1.3 : 3.0; }
+  else if (kind === 'gift') { o = MD.crate(emoji || '🎁', 0xffb703); o.scale.setScalar(0.55); }
+  else if (kind === 'buffalo') { o = MD.buffalo(); o.scale.setScalar(0.85); }
+  else if (kind === 'cone') { o = new THREE.Group(); [-0.7, 0.7].forEach(x => { const c = new THREE.Mesh(gc('cone', () => new THREE.ConeGeometry(0.4, 1.1, 12)), mat(0xff6d00)); c.position.set(x, 0.55, 0); c.castShadow = true; o.add(c); const st = new THREE.Mesh(gc('coneS', () => new THREE.CylinderGeometry(0.24, 0.3, 0.16, 12)), mat(0xffffff)); st.position.set(x, 0.62, 0); o.add(st); }); }
+  else { o = new THREE.Mesh(gc('hole', () => new THREE.CircleGeometry(1.0, 18)), mat(0x2b2b2b, { roughness: 1 })); o.rotation.x = -Math.PI / 2; p.y += 0.09; o.scale.set(1.2, 0.8, 1); }
+  o.position.copy(p); if (kind !== 'hole') o.rotation.y = Math.atan2(T(s).x, T(s).z) + (kind === 'buffalo' ? Math.PI / 2 : 0);
+  world.add(o); R.items.push({ kind, s, d, o, y: p.y, done: false, ph: Math.random() * 6 });
+}
+function clearItems() { R.items.forEach(it => it.o.parent && it.o.parent.remove(it.o)); R.items = []; }
+W.clearFun = clearItems;
+function collect(it) {
+  if (it.done) return; it.done = true;
+  const sc = screenOf(it.o), n = it.kind === 'gift' ? 1 : 1;
+  R.fly.push({ o: it.o, t: 0, y: it.o.position.y }); emit('coin', { n, x: sc.x, y: sc.y, kind: it.kind });
+}
+W.steer = function (dir) { // dir: +1 = sang phải màn hình, −1 = sang trái
+  if (!R || R.track !== 'road' || !R.drive || !R.funOn || R.drive.to - R.veh.s < 45) return false;
+  R.lane = Math.max(-1, Math.min(1, R.lane - dir)); R.latT = R.lane * LANE; return true; // camera sau xe: phải màn hình = −S
+};
+W.lane = () => R.lane;
+W.tapAt = function (x, y) {
+  if (!R) return false;
+  if (R.mission && R.mission.type !== 'fire' && !R.mission.picked) { const t = screenOf(R.mission.target); if (Math.hypot(t.x - x, t.y - y) < 130) { W.missionTap(x, y, true); return true; } }
+  let best = null, bd = 80;
+  R.items.forEach(it => { if (it.done || it.kind !== 'star') return; const sc = screenOf(it.o); if (sc.z > 1) return; const dd = Math.hypot(sc.x - x, sc.y - y); if (dd < bd) { bd = dd; best = it; } });
+  if (best) { collect(best); return true; }
+  return false;
+};
+function updateFun(dt, time, moving) {
+  const v = R.veh;
+  for (let i = R.items.length - 1; i >= 0; i--) {
+    const it = R.items[i];
+    if (!it.done && (it.kind === 'star' || it.kind === 'gift')) { it.o.rotation.y += dt * 2.5; it.o.position.y = it.y + Math.sin(time * 3 + it.ph) * 0.18 + (it.kind === 'gift' ? 0.3 : 0); }
+    if (R.track === 'road' && !it.done && v.s + 2.2 >= it.s && v.s - 2.5 <= it.s && Math.abs(R.lat - it.d) < 1.45) {
+      if (it.kind === 'star' || it.kind === 'gift') collect(it);
+      else { it.done = true; if (R.drive) R.drive.v *= 0.35; R.wob = 0.6; emit('bump', { kind: it.kind }); if (it.kind === 'cone') it.o.children.forEach(c => { c.rotation.z = 1.4; c.position.y = 0.4; }); if (it.kind === 'buffalo') tween(it.o, at(it.s, it.d > 0 ? 9 : -9), 1.6, { walk: true }); }
+    }
+    if (it.s < v.s - 35 && !R.fly.some(f => f.o === it.o)) { it.o.parent && it.o.parent.remove(it.o); R.items.splice(i, 1); }
+  }
+  for (let i = R.fly.length - 1; i >= 0; i--) { const f = R.fly[i]; f.t += dt; f.o.position.y = f.y + f.t * 9; f.o.rotation.y += dt * 14; f.o.scale.multiplyScalar(1 - dt * 1.6); if (f.t > 0.7) { f.o.parent && f.o.parent.remove(f.o); R.fly.splice(i, 1); } }
+  if (R.wob > 0) { R.wob -= dt; const p = v.parts[0]; p.rotation.z += Math.sin(R.wob * 40) * 0.05 * R.wob; }
+  // khách nhảy mừng
+  for (let i = R.jumps.length - 1; i >= 0; i--) { const j = R.jumps[i]; j.t += dt; j.o.position.y = j.y + Math.abs(Math.sin(j.t * 9)) * 0.9 * Math.max(0, 1 - j.t / 1.1); const A = j.o.userData.arms; if (A) { A[0].rotation.z = -2.6; A[1].rotation.z = 2.6; } if (j.t > 1.1) { j.o.position.y = j.y; if (A) { A[0].rotation.z = -0.25; A[1].rotation.z = 0.25; } R.jumps.splice(i, 1); } }
+  updateMission(dt, time);
+}
+W.cheer = function (k) { (R.waiters[k] || []).forEach(o => { if (!R.jumps.some(j => j.o === o)) R.jumps.push({ o, t: Math.random() * 0.15, y: o.position.y }); }); };
+
+/* ================= nhiệm vụ xe ưu tiên ================= */
+W.missionS = i => R.stationS[i] + R.legLen * (R.feats.some(f => f.leg === i) ? 0.78 : 0.5);
+const FIRE_D = 10, FIRE_U = [-9, 0, 9];
+function hut(col) { const g = new THREE.Group(); rbox(3.4, 2.4, 3.0, 0.12, col, 0, 1.2, 0, g); const rf = new THREE.Mesh(gc('hutRoof', () => new THREE.ConeGeometry(2.8, 1.6, 4)), mat(0x9c4a2b)); rf.position.y = 3.2; rf.rotation.y = Math.PI / 4; rf.castShadow = true; g.add(rf); rbox(0.9, 1.4, 0.1, 0.05, 0x6d4c41, 0, 0.7, 1.52, g); return g; }
+const FLAME_M = [mat(0xff5400, { emissive: 0xff3d00, emissiveIntensity: 1.2, transparent: true, opacity: 0.92 }), mat(0xffb703, { emissive: 0xffa000, emissiveIntensity: 1.4, transparent: true, opacity: 0.9 }), mat(0xffe066, { emissive: 0xffd000, emissiveIntensity: 1.6, transparent: true, opacity: 0.85 })];
+function flames() { const g = new THREE.Group(); const L = []; for (let i = 0; i < 7; i++) { const f = new THREE.Mesh(gc('flame', () => new THREE.ConeGeometry(0.95, 3.0, 9)), FLAME_M[i % 3]); f.position.set((Math.random() - 0.5) * 3.0, 1.4 + Math.random() * 0.9, (Math.random() - 0.5) * 2.6); f.userData.ph = Math.random() * 6; f.userData.k = 0.7 + Math.random() * 0.6; g.add(f); L.push(f); } g.userData.L = L; return g; }
+W.setupMission = function (type) {
+  W.endMission();
+  const sm = R.veh.s, g = new THREE.Group(); world.add(g);
+  const m = R.mission = { type, s: sm, g, fires: [], aimU: 0, aimUT: 0, steer: 0, spray: false, sprayT: 0, drops: [], smokes: [], done: false, picked: false };
+  const yaw = Math.atan2(T(sm).x, T(sm).z);
+  if (type === 'fire') {
+    FIRE_U.forEach(du => {
+      const s = sm + du, h = hut([0xfff1c9, 0xffe0b2, 0xe8f4ff][m.fires.length]); h.position.copy(at(s, FIRE_D + 2.2)); h.rotation.y = yaw + Math.PI; g.add(h);
+      const fl = flames(); fl.position.copy(at(s, FIRE_D + 2.2)); fl.position.y = 2.0; g.add(fl);
+      m.fires.push({ du, level: 1, hut: h, fl, smokeT: 0, out: false });
+    });
+    const ret = new THREE.Group(); const ring = new THREE.Mesh(new THREE.RingGeometry(1.5, 2.0, 32), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.9, depthWrite: false })); ring.rotation.x = -Math.PI / 2; ret.add(ring);
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.35, 16), ring.material); dot.rotation.x = -Math.PI / 2; ret.add(dot);
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 10), mat(0x3a86ff, { emissive: 0x3a86ff, emissiveIntensity: 0.5 })); arrow.rotation.x = Math.PI; arrow.position.y = 2.6; ret.add(arrow); ret.userData.arrow = arrow; ret.userData.ring = ring;
+    ret.position.copy(at(sm, FIRE_D)); ret.position.y = 0.12; g.add(ret); m.ret = ret;
+    emit('fireLeft', { n: 3 });
+  } else if (type === 'ambulance') {
+    const p = at(sm + 5, 7.6); const st = new THREE.Group(); st.position.copy(p); st.rotation.y = yaw; g.add(st);
+    rbox(1.3, 0.25, 2.6, 0.08, 0xffffff, 0, 0.35, 0, st); rbox(1.4, 0.1, 2.7, 0.04, 0xe63946, 0, 0.2, 0, st);
+    const pa = MD.person({ cloth: 0x90caf9 }); pa.rotation.x = -Math.PI / 2; pa.position.set(0, 0.85, 1.0); pa.scale.setScalar(0.8); st.add(pa);
+    const helper = MD.person({ cloth: 0xffb703 }); helper.position.copy(at(sm + 7.2, 8.6)); helper.scale.setScalar(0.85); helper.rotation.y = yaw + Math.PI; g.add(helper); m.helper = helper;
+    m.target = st;
+  } else {
+    const kid = MD.person({ cloth: 0xff70a6 }); kid.scale.setScalar(0.6); kid.position.copy(at(sm + 5, 7.4)); kid.rotation.y = Math.atan2(-S(sm).x, -S(sm).z); g.add(kid); m.target = kid;
+    const tears = [-0.2, 0.2].map(x => { const t = MD.ball(0.07, 0x4cc9f0, x, -0.05, 0.55, kid.userData.head, 8); return t; }); m.tears = tears;
+  }
+  if (m.target) { const mk = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 10), mat(0xffd23f, { emissive: 0xffb703, emissiveIntensity: 0.8 })); mk.rotation.x = Math.PI; const tp = m.target.position.clone(); mk.position.set(tp.x, 3.6, tp.z); g.add(mk); m.marker = mk; }
+  R.camMode = 'mission';
+};
+W.endMission = function () { const m = R && R.mission; if (!m) return; m.drops.forEach(d => d.m.parent && d.m.parent.remove(d.m)); m.smokes.forEach(d => d.m.parent && d.m.parent.remove(d.m)); m.g.parent && m.g.parent.remove(m.g); R.mission = null; if (R.camMode === 'mission') R.camMode = 'drive'; };
+W.mission = () => R && R.mission && { type: R.mission.type, aimU: R.mission.aimU, spray: R.mission.spray, left: R.mission.fires.filter(f => !f.out).length, levels: R.mission.fires.map(f => +f.level.toFixed(2)), done: R.mission.done, picked: R.mission.picked };
+W.spray = on => { const m = R && R.mission; if (!m || m.type !== 'fire' || m.done) return; if (on && !m.spray) m.sprayT = 0; m.spray = !!on; };
+W.missionSteer = dir => { const m = R && R.mission; if (m) m.steer = dir; };
+const _ray = new THREE.Raycaster(), _plane = new THREE.Plane(new V3(0, 1, 0), 0), _hit = new V3();
+W.missionAim = function (x, y) {
+  const m = R && R.mission; if (!m || m.type !== 'fire') return;
+  _ray.setFromCamera({ x: x / innerWidth * 2 - 1, y: -(y / innerHeight) * 2 + 1 }, camera);
+  if (!_ray.ray.intersectPlane(_plane, _hit)) return;
+  const c = P(m.s), t = T(m.s); m.aimUT = Math.max(-15, Math.min(15, (_hit.x - c.x) * t.x + (_hit.z - c.z) * t.z));
+};
+W.missionTap = function (x, y, force) {
+  const m = R && R.mission; if (!m || m.done) return false;
+  if (m.type === 'fire') { if (force) { m.fires.forEach(f => { f.level = 0; }); return true; } W.missionAim(x, y); return true; }
+  if (m.picked) return false; m.picked = true; if (m.marker) m.marker.visible = false;
+  const v = R.veh, door = at(v.s - 1, 2.0); door.y = 0.05;
+  if (m.type === 'ambulance') {
+    const doc = MD.person({ ...OUTFIT.ambulance }); doc.scale.setScalar(0.85); doc.position.copy(door); m.g.add(doc);
+    const near = at(m.s + 6.4, 7.0); doc.lookAt(near.x, 0, near.z);
+    tween(doc, near, 1.0, { walk: true, done: () => { m.helper && (m.helper.userData.arms[1].rotation.z = 2.4); tween(m.target, door.clone().setY(0.05), 1.4, { walk: false, done: () => { m.g.remove(m.target); } }); doc.lookAt(door.x, 0, door.z); tween(doc, door.clone(), 1.4, { walk: true, shrink: true, done: () => { m.g.remove(doc); m.done = true; emit('picked', { type: m.type }); } }); } });
+  } else {
+    const cop = MD.person({ ...OUTFIT.police }); cop.scale.setScalar(0.85); cop.position.copy(door); m.g.add(cop);
+    const near = at(m.s + 6.2, 6.6); cop.lookAt(near.x, 0, near.z);
+    (m.tears || []).forEach(t => t.visible = false);
+    tween(cop, near, 1.0, { walk: true, done: () => { const kid = m.target; kid.lookAt(door.x, kid.position.y, door.z); cop.lookAt(door.x, 0, door.z); tween(kid, door.clone().setY(kid.position.y), 1.3, { walk: true, shrink: true, done: () => m.g.remove(kid) }); tween(cop, door.clone(), 1.3, { walk: true, shrink: true, done: () => { m.g.remove(cop); m.done = true; emit('picked', { type: m.type }); } }); } });
+  }
+  return true;
+};
+const DROP_G = new THREE.SphereGeometry(0.22, 6, 5), DROP_M = new THREE.MeshBasicMaterial({ color: 0x8fd3ff, transparent: true, opacity: 0.85, depthWrite: false });
+DROP_G.userData.shared = true;
+const SMOKE_M = () => new THREE.MeshStandardMaterial({ color: 0x8d8f94, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1 });
+function updateMission(dt, time) {
+  const m = R.mission; if (!m) return;
+  if (m.marker) { m.marker.position.y = 3.6 + Math.sin(time * 4) * 0.3; m.marker.rotation.y += dt * 2; }
+  if (m.tears) m.tears.forEach((t, i) => { t.position.y = -0.05 - ((time * 0.8 + i * 0.5) % 1) * 0.4; });
+  if (m.type !== 'fire') return;
+  // ngắm
+  if (m.steer) m.aimUT = Math.max(-15, Math.min(15, m.aimUT + m.steer * 11 * dt));
+  m.aimU += (m.aimUT - m.aimU) * (1 - Math.exp(-dt * 10));
+  const A = at(m.s + m.aimU, FIRE_D); m.ret.position.set(A.x, 0.12, A.z);
+  m.ret.userData.arrow.position.y = 2.6 + Math.sin(time * 6) * 0.25; m.ret.userData.ring.material.color.setHex(m.spray ? 0x4cc9f0 : 0xffd23f);
+  // phun nước: hạt bay cung parabol từ vòi tới điểm ngắm
+  const truck = R.veh.parts[0]; truck.updateMatrixWorld();
+  if (m.spray && !m.done) {
+    m.sprayT += dt;
+    const noz = new V3(0, 3.75, 1.0).applyMatrix4(truck.matrixWorld), G = 18;
+    m.acc = (m.acc || 0) + dt * 130; const nNew = Math.floor(m.acc); m.acc -= nNew;
+    for (let k = 0; k < nNew && m.drops.length < 320; k++) {
+      const tgt = A.clone().add(new V3((Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6)), Tt = 0.75 + Math.random() * 0.1;
+      const vel = tgt.clone().sub(noz).divideScalar(Tt); vel.y += 0.5 * G * Tt;
+      const d = new THREE.Mesh(DROP_G, DROP_M); d.position.copy(noz); m.g.add(d); m.drops.push({ m: d, p0: noz.clone(), v: vel, t: (k / Math.max(1, nNew)) * dt, T: Tt, G });
+    }
+  }
+  for (let i = m.drops.length - 1; i >= 0; i--) {
+    const d = m.drops[i]; d.t += dt; const t = Math.max(0, d.t);
+    d.m.position.set(d.p0.x + d.v.x * t, d.p0.y + d.v.y * t - 0.5 * d.G * t * t, d.p0.z + d.v.z * t);
+    d.m.scale.setScalar(1 + t * 1.2);
+    if (d.t >= d.T) { m.g.remove(d.m); m.drops.splice(i, 1); }
+  }
+  // lửa giảm khi ngắm trúng
+  let left = 0;
+  m.fires.forEach(f => {
+    if (!f.out && m.spray && m.sprayT > 0.5 && Math.abs(m.aimU - f.du) < 4.0) f.level = Math.max(0, f.level - dt / 3.4);
+    if (!f.out && f.level <= 0) { f.out = true; f.fl.visible = false; f.smokeT = 4; f.hut.children[0].material = mat(0x8d8478); emit('fireLeft', { n: m.fires.filter(x => !x.out).length }); }
+    if (!f.out) { left++; const k = 0.25 + 0.85 * f.level; f.fl.userData.L.forEach(fl => { const u = fl.userData; fl.scale.set(k * u.k, k * u.k * (0.8 + 0.35 * Math.sin(time * 11 + u.ph)), k * u.k); }); }
+    if (f.smokeT > 0 || (!f.out && f.level < 0.95 && m.spray)) {
+      f.smokeT -= dt; if (Math.random() < dt * 9 && m.smokes.length < 70) { const sm = new THREE.Mesh(gc('puff', () => new THREE.SphereGeometry(0.5, 10, 8)), SMOKE_M()); sm.position.copy(f.fl.position).add(new V3((Math.random() - 0.5) * 2, 0.8, (Math.random() - 0.5) * 2)); m.g.add(sm); m.smokes.push({ m: sm, life: 1 }); }
+    }
+  });
+  for (let i = m.smokes.length - 1; i >= 0; i--) { const o = m.smokes[i]; o.life -= dt * 0.45; o.m.position.y += dt * 2.2; o.m.scale.setScalar(0.8 + (1 - o.life) * 2.6); o.m.material.opacity = Math.max(0, o.life) * 0.6; if (o.life <= 0) { m.g.remove(o.m); o.m.material.dispose(); m.smokes.splice(i, 1); } }
+  if (!left && !m.done) { m.done = true; m.spray = false; emit('missionDone', { type: 'fire' }); }
+}
+/* ---------- tới trạm: gặp người nhà ---------- */
+W.meetFamily = function (type, done) {
+  const v = R.veh, y = platformY(), g = new THREE.Group(); world.add(g);
+  const fam = [MD.person({ cloth: 0x2a9d8f }), MD.person({ cloth: 0xe63946, nonla: type === 'ambulance' })];
+  fam.forEach((p, j) => { p.position.copy(at(v.s - 2 + j * 1.4, 7.2)); p.position.y = y; p.scale.setScalar(0.85); const sv = S(v.s); p.rotation.y = Math.atan2(-sv.x, -sv.z); g.add(p); R.jumps.push({ o: p, t: 0, y }); });
+  const who = type === 'police' ? MD.person({ cloth: 0xff70a6 }) : MD.person({ cloth: 0x90caf9 }); who.scale.setScalar(type === 'police' ? 0.6 : 0.85);
+  const door = at(v.s - 1, 2.2); door.y = y; who.position.copy(door); g.add(who);
+  const to = at(v.s - 1.3, 6.4); to.y = y; who.lookAt(to.x, y, to.z);
+  tween(who, to, 1.3, { walk: true, done: () => {
+    for (let i = 0; i < 6; i++) { const h = sign('❤️', 1, 1, '#ffffff00', '#e63946'); h.position.set(to.x + (Math.random() - 0.5) * 2, y + 2.4 + Math.random(), to.z + (Math.random() - 0.5) * 2); g.add(h); h.lookAt(camera.position); R.fly.push({ o: h, t: -i * 0.12, y: h.position.y }); }
+    fam.forEach(p => R.jumps.push({ o: p, t: 0, y }));
+    setTimeout(() => { world.remove(g); done && done(); }, 1700);
+  } });
+};
