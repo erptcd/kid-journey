@@ -88,7 +88,7 @@ function showMenu() {
 function start() {
   ac(); engineStart(S.veh); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false); S.coins = 0; S.mStars = 0; S.carry = null; S.inMission = null; S.usedRev = new Set();
   S.missionLegs = [];
-  if (VEHICLES[S.veh].siren) { const n = routeStations().length - 1; for (let i = 0; i < n; i++) if (Math.random() < 0.3) S.missionLegs.push(i); if (!S.missionLegs.includes(0)) S.missionLegs.unshift(0); } // chặng đầu luôn có nhiệm vụ để bé chắc chắn gặp
+  if (VEHICLES[S.veh].track === 'road') { const n = routeStations().length - 1; for (let i = 0; i < n; i++) S.missionLegs.push(i); } // xe đường bộ: chặng nào cũng có nhiệm vụ
   if (window.__forceMissions) S.missionLegs = window.__forceMissions.slice(); // dùng cho test.js
   setupWorld();
   $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden'); frameSide(false);
@@ -198,7 +198,7 @@ function depart() {
   const goStation = () => driveTo(target, () => {
     W.setBoost(false); $('#speedfx').classList.add('hidden'); W.setCamBoard(); sfx.brake(S.veh); W.clearFun();
     const unload = () => W.unload(() => { W.prepareWaiters(i + 1); arriveAt(i + 1); });
-    if (S.carry) { const t = S.carry; S.carry = null; banner(t === 'police' ? '👨‍👩‍👧 Bé lạc đã gặp lại bố mẹ!' : '💐 Người nhà đón người bệnh!', 2000); W.meetFamily(t, () => { S.mStars += 2; renderHud(); sfx2.cheer(); burstConfetti(30); flyStar(innerWidth / 2, innerHeight / 2, '💖'); banner('💖 Người nhà cảm ơn bé! +2 ⭐', 2200); setTimeout(unload, 900); }); }
+    if (S.carry) { const t = S.carry; S.carry = null; banner(MISSION_TXT[t].meet, 2000); W.meetFamily(t, () => { S.mStars += 2; renderHud(); sfx2.cheer(); burstConfetti(30); flyStar(innerWidth / 2, innerHeight / 2, '💖'); banner(t === 'truck' ? '🌟 Giao hàng giỏi quá! +2 ⭐' : '💖 Người nhà cảm ơn bé! +2 ⭐', 2200); setTimeout(unload, 900); }); }
     else unload();
   });
   const step = () => { if (S.mode !== 'play') return; const nx = stops.shift(); if (!nx) return goStation(); driveTo(nx.s, () => nx.fn(step)); };
@@ -207,8 +207,11 @@ function depart() {
 /* ---------- nhiệm vụ xe ưu tiên ---------- */
 const MISSION_TXT = {
   fire: { start: '🔥 Có cháy! ◀ ▶ để ngắm, bấm 💦 để phun, bấm 🛑 để dừng', done: '💦 Bé dập tắt hết đám cháy! +3 ⭐', stars: 3 },
-  ambulance: { start: '🚑 Có người bị ốm bên đường! Bấm vào người bệnh để đón', btn: '🚑 Đón người bệnh', picked: '🚑 Đã đón người bệnh! Mình chở tới trạm sau nhé' },
-  police: { start: '🚓 Có bé bị lạc đang khóc! Bấm vào bé để giúp', btn: '🚓 Giúp bé lạc', picked: '🚓 Đã đón bé lạc! Mình đưa bé tới trạm sau gặp bố mẹ nhé' }
+  ambulance: { start: '🚑 Có người bị ốm bên đường! Bấm vào người bệnh để đón', btn: '🚑 Đón người bệnh', picked: '🚑 Đã đón người bệnh! Mình chở tới trạm sau nhé', meet: '💐 Người nhà đón người bệnh!' },
+  police: { start: '🚓 Có bé bị lạc đang khóc! Bấm vào bé để giúp', btn: '🚓 Giúp bé lạc', picked: '🚓 Đã đón bé lạc! Mình đưa bé tới trạm sau gặp bố mẹ nhé', meet: '👨‍👩‍👧 Bé lạc đã gặp lại bố mẹ!' },
+  car: { start: '🧒 Có em bé vẫy tay bên đường! Bấm vào em bé để đón', btn: '🧒 Đón em bé', picked: '🚗 Đã đón em bé! Mình chở em tới trạm sau gặp bố mẹ nhé', meet: '👨‍👩‍👧 Em bé về với bố mẹ rồi!' },
+  taxi: { start: '🙋 Có khách vẫy taxi! Bấm vào khách để đón', btn: '🙋 Đón khách', picked: '🚕 Khách đã lên xe! Chở khách tới trạm sau nhé', meet: '🧳 Khách tới nơi, người nhà ra đón!' },
+  truck: { start: '📦 Bác nông dân nhờ chở hàng! Bấm vào đống hàng để chất lên xe', btn: '📦 Chất hàng lên xe', picked: '🚚 Đã chất hàng! Chở tới trạm sau giao nhé', meet: '🏪 Giao hàng xong, cô bán hàng cảm ơn!' }
 };
 let missionCont = null;
 function mission(cont) {

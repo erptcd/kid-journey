@@ -21,7 +21,7 @@ async function open(browser, cfg, shotDir) {
 async function playUntil(page, cond, ms = 90000, solve = true) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {
-    const r = await page.evaluate(([c, solve]) => { const K = window.__kj; if (new Function('K', 'return ' + c)(K)) return true; if (solve && K.QUI.q && !document.querySelector('#qp').classList.contains('hidden')) K.QUI.solve(); return false; }, [cond, solve]);
+    const r = await page.evaluate(([c, solve]) => { const K = window.__kj; if (new Function('K', 'return ' + c)(K)) return true; if (solve && K.QUI.q && !document.querySelector('#qp').classList.contains('hidden')) K.QUI.solve(); if (solve && K.S.inMission) { const m = K.W.mission(); if (m && !m.done) { if (m.type === 'fire') K.W.missionTap(0, 0, true); else if (!m.picked) K.W.missionTap(0, 0, true); } } return false; }, [cond, solve]);
     if (r) return true;
     await sleep(150);
   }

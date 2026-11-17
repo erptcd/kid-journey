@@ -581,8 +581,10 @@ W.setupMission = function (type) {
   const sm = R.veh.s, g = new THREE.Group(); world.add(g);
   const m = R.mission = { type, s: sm, g, fires: [], aimU: 0, aimUT: 0, steer: 0, spray: false, sprayT: 0, drops: [], smokes: [], done: false, picked: false };
   const yaw = Math.atan2(T(sm).x, T(sm).z);
+  R.missionN = (R.missionN || 0) + 1;
   if (type === 'fire') {
-    FIRE_U.forEach(du => {
+    const LAYOUTS = [FIRE_U, [-11, -2, 8], [-7, 3, 12], [-12, 0, 6], [-8, 2, 11]];
+    LAYOUTS[(R.missionN - 1) % LAYOUTS.length].forEach(du => {
       const s = sm + du, h = hut([0xfff1c9, 0xffe0b2, 0xe8f4ff][m.fires.length]); h.position.copy(at(s, FIRE_D + 2.2)); h.rotation.y = yaw + Math.PI; g.add(h);
       const fl = flames(); fl.position.copy(at(s, FIRE_D + 2.2)); fl.position.y = 2.0; g.add(fl);
       m.fires.push({ du, level: 1, hut: h, fl, smokeT: 0, out: false });
@@ -591,13 +593,23 @@ W.setupMission = function (type) {
     const dot = new THREE.Mesh(new THREE.CircleGeometry(0.35, 16), ring.material); dot.rotation.x = -Math.PI / 2; ret.add(dot);
     const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 10), mat(0x3a86ff, { emissive: 0x3a86ff, emissiveIntensity: 0.5 })); arrow.rotation.x = Math.PI; arrow.position.y = 2.6; ret.add(arrow); ret.userData.arrow = arrow; ret.userData.ring = ring;
     ret.position.copy(at(sm, FIRE_D)); ret.position.y = 0.12; g.add(ret); m.ret = ret;
-    emit('fireLeft', { n: 3 });
+    emit('fireLeft', { n: m.fires.length });
   } else if (type === 'ambulance') {
     const p = at(sm + 5, 7.6); const st = new THREE.Group(); st.position.copy(p); st.rotation.y = yaw; g.add(st);
     rbox(1.3, 0.25, 2.6, 0.08, 0xffffff, 0, 0.35, 0, st); rbox(1.4, 0.1, 2.7, 0.04, 0xe63946, 0, 0.2, 0, st);
     const pa = MD.person({ cloth: 0x90caf9 }); pa.rotation.x = -Math.PI / 2; pa.position.set(0, 0.85, 1.0); pa.scale.setScalar(0.8); st.add(pa);
     const helper = MD.person({ cloth: 0xffb703 }); helper.position.copy(at(sm + 7.2, 8.6)); helper.scale.setScalar(0.85); helper.rotation.y = yaw + Math.PI; g.add(helper); m.helper = helper;
     m.target = st;
+  } else if (type === 'car' || type === 'taxi') {
+    const kidT = type === 'car', p = MD.person(kidT ? { cloth: [0xffb703, 0x8338ec, 0x06d6a0][R.missionN % 3], bag: 0x3a86ff } : { cloth: [0x2a9d8f, 0xe63946, 0x6d4c41][R.missionN % 3], cap: R.missionN % 2 ? 0xffffff : null });
+    p.scale.setScalar(kidT ? 0.62 : 0.85); p.position.copy(at(sm + 5, 7.4)); p.rotation.y = Math.atan2(-S(sm).x, -S(sm).z); g.add(p); m.target = p; m.wave = p;
+    if (!kidT) { const bag = rbox(0.7, 0.9, 0.4, 0.1, 0x8d6e63, 0, 0, 0, g); bag.position.copy(at(sm + 6.2, 7.0)); bag.position.y = 0.45; m.bag = bag; }
+  } else if (type === 'truck') {
+    const pile = new THREE.Group(); pile.position.copy(at(sm + 5, 8.4)); pile.rotation.y = yaw; g.add(pile);
+    const EMO = ['🍉', '🥭', '🍍', '🌽', '🥥', '🍌'];
+    m.crates = [[-1.3, 0, 0], [1.3, 0, 0], [0, 1.5, 0]].map(([x, y, z], i) => { const c = MD.crate(EMO[(R.missionN + i) % EMO.length], [0xc8964f, 0xd9a35f, 0xb5803f][i]); c.scale.setScalar(0.85); c.position.set(x, y, z); pile.add(c); return c; });
+    const farmer = MD.person({ cloth: 0x52b788, nonla: true }); farmer.scale.setScalar(0.85); farmer.position.copy(at(sm + 8.2, 8.2)); farmer.rotation.y = Math.atan2(-S(sm).x, -S(sm).z); g.add(farmer); m.wave = farmer;
+    m.target = pile;
   } else {
     const kid = MD.person({ cloth: 0xff70a6 }); kid.scale.setScalar(0.6); kid.position.copy(at(sm + 5, 7.4)); kid.rotation.y = Math.atan2(-S(sm).x, -S(sm).z); g.add(kid); m.target = kid;
     const tears = [-0.2, 0.2].map(x => { const t = MD.ball(0.07, 0x4cc9f0, x, -0.05, 0.55, kid.userData.head, 8); return t; }); m.tears = tears;
@@ -621,7 +633,15 @@ W.missionTap = function (x, y, force) {
   if (m.type === 'fire') { if (force) { m.fires.forEach(f => { f.level = 0; }); return true; } W.missionAim(x, y); return true; }
   if (m.picked) return false; m.picked = true; if (m.marker) m.marker.visible = false;
   const v = R.veh, door = at(v.s - 1, 2.0); door.y = 0.05;
-  if (m.type === 'ambulance') {
+  if (m.type === 'car' || m.type === 'taxi') {
+    const p = m.target; m.wave = null; if (p.userData.arms) p.userData.arms[1].rotation.z = 0.25;
+    p.lookAt(door.x, p.position.y, door.z);
+    if (m.bag) tween(m.bag, door.clone().setY(0.45), 1.4, { arc: 2, done: () => m.g.remove(m.bag) });
+    tween(p, door.clone().setY(p.position.y), 1.5, { walk: true, shrink: true, done: () => { m.g.remove(p); m.done = true; emit('picked', { type: m.type }); } });
+  } else if (m.type === 'truck') {
+    const bed = new V3(); v.parts[0].getWorldPosition(bed); bed.y += 2.6; let left = m.crates.length;
+    m.crates.forEach((c, i) => { const from = new V3(); c.getWorldPosition(from); m.target.remove(c); m.g.add(c); c.position.copy(from); setTimeout(() => tween(c, bed.clone().add(new V3(0, 0, 0)), 0.9, { arc: 5, shrink: true, done: () => { m.g.remove(c); if (--left === 0) { m.done = true; emit('picked', { type: m.type }); } } }), i * 350); });
+  } else if (m.type === 'ambulance') {
     const doc = MD.person({ ...OUTFIT.ambulance }); doc.scale.setScalar(0.85); doc.position.copy(door); m.g.add(doc);
     const near = at(m.s + 6.4, 7.0); doc.lookAt(near.x, 0, near.z);
     tween(doc, near, 1.0, { walk: true, done: () => { m.helper && (m.helper.userData.arms[1].rotation.z = 2.4); tween(m.target, door.clone().setY(0.05), 1.4, { walk: false, done: () => { m.g.remove(m.target); } }); doc.lookAt(door.x, 0, door.z); tween(doc, door.clone(), 1.4, { walk: true, shrink: true, done: () => { m.g.remove(doc); m.done = true; emit('picked', { type: m.type }); } }); } });
@@ -642,6 +662,7 @@ const SMOKE_M = () => new THREE.MeshStandardMaterial({ color: 0x8d8f94, transpar
 function updateMission(dt, time) {
   const m = R.mission; if (!m) return;
   if (m.marker) { m.marker.position.y = 3.6 + Math.sin(time * 4) * 0.3; m.marker.rotation.y += dt * 2; }
+  if (m.wave && m.wave.userData.arms) m.wave.userData.arms[1].rotation.z = 2.3 + Math.sin(time * 7) * 0.5;
   if (m.tears) m.tears.forEach((t, i) => { t.position.y = -0.05 - ((time * 0.8 + i * 0.5) % 1) * 0.4; });
   if (m.type !== 'fire') return;
   // ngắm
@@ -701,11 +722,12 @@ W.meetFamily = function (type, done) {
   const v = R.veh, y = platformY(), g = new THREE.Group(); world.add(g);
   const fam = [MD.person({ cloth: 0x2a9d8f }), MD.person({ cloth: 0xe63946, nonla: type === 'ambulance' })];
   fam.forEach((p, j) => { p.position.copy(at(v.s - 2 + j * 1.4, 7.2)); p.position.y = y; p.scale.setScalar(0.85); const sv = S(v.s); p.rotation.y = Math.atan2(-sv.x, -sv.z); g.add(p); R.jumps.push({ o: p, t: 0, y }); });
-  const who = type === 'police' ? MD.person({ cloth: 0xff70a6 }) : MD.person({ cloth: 0x90caf9 }); who.scale.setScalar(type === 'police' ? 0.6 : 0.85);
+  const small = type === 'police' || type === 'car';
+  const who = type === 'truck' ? MD.crate(['🍉', '🥭', '🍍'][R.missionN % 3], 0xd9a35f) : MD.person({ cloth: type === 'police' ? 0xff70a6 : type === 'car' ? 0xffb703 : type === 'taxi' ? 0x2a9d8f : 0x90caf9 }); who.scale.setScalar(small ? 0.6 : 0.85);
   const door = at(v.s - 1, 2.2); door.y = y; who.position.copy(door); g.add(who);
   const to = at(v.s - 1.3, 6.4); to.y = y; who.lookAt(to.x, y, to.z);
-  tween(who, to, 1.3, { walk: true, done: () => {
-    for (let i = 0; i < 6; i++) { const h = sign('❤️', 1, 1, '#ffffff00', '#e63946'); h.position.set(to.x + (Math.random() - 0.5) * 2, y + 2.4 + Math.random(), to.z + (Math.random() - 0.5) * 2); g.add(h); h.lookAt(camera.position); R.fly.push({ o: h, t: -i * 0.12, y: h.position.y }); }
+  tween(who, to, 1.3, { walk: type !== 'truck', arc: type === 'truck' ? 4 : 0, done: () => {
+    for (let i = 0; i < 6; i++) { const h = sign(type === 'truck' ? '⭐' : '❤️', 1, 1, '#ffffff00', '#e63946'); h.position.set(to.x + (Math.random() - 0.5) * 2, y + 2.4 + Math.random(), to.z + (Math.random() - 0.5) * 2); g.add(h); h.lookAt(camera.position); R.fly.push({ o: h, t: -i * 0.12, y: h.position.y }); }
     fam.forEach(p => R.jumps.push({ o: p, t: 0, y }));
     setTimeout(() => { world.remove(g); done && done(); }, 1700);
   } });
