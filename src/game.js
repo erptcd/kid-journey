@@ -88,7 +88,7 @@ function showMenu() {
 function start() {
   ac(); engineStart(S.veh); S.mode = 'play'; S.si = 0; S.k = 0; S.results = []; S.bonus = 0; S.usedQ = new Set(); S.newStamps = []; S.boostNext = false; W.setBoost(false); S.coins = 0; S.mStars = 0; S.carry = null; S.inMission = null; S.usedRev = new Set();
   S.missionLegs = [];
-  if (VEHICLES[S.veh].siren) { const n = routeStations().length - 1; for (let i = 0; i < n; i++) if (Math.random() < 0.3) S.missionLegs.push(i); if (!S.missionLegs.length && n >= 2) S.missionLegs.push(1 + Math.floor(Math.random() * (n - 1))); }
+  if (VEHICLES[S.veh].siren) { const n = routeStations().length - 1; for (let i = 0; i < n; i++) if (Math.random() < 0.3) S.missionLegs.push(i); if (!S.missionLegs.includes(0)) S.missionLegs.unshift(0); } // chặng đầu luôn có nhiệm vụ để bé chắc chắn gặp
   if (window.__forceMissions) S.missionLegs = window.__forceMissions.slice(); // dùng cho test.js
   setupWorld();
   $('#menu').classList.add('hidden'); $('#fin').classList.add('hidden'); $('#hud').classList.remove('hidden'); $('#mini').classList.remove('hidden'); frameSide(false);
