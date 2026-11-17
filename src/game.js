@@ -67,7 +67,7 @@ function renderMenu() {
   }
   const word = VEHICLES[S.veh].slotTitle;
   $('#slotTitle').textContent = word;
-  const sc = $('#slotChips'); sc.innerHTML = ''; [2, 3, 4].forEach(n => chip(sc, String(n), S.slots === n, () => { S.slots = n; store.set('slots', n); }));
+  const sc = $('#slotChips'); sc.innerHTML = ''; [1, 2, 3, 4].forEach(n => chip(sc, String(n), S.slots === n, () => { S.slots = n; store.set('slots', n); }));
   const key = S.veh + S.dir + startIdx() + S.slots;
   if (key !== previewKey) { previewKey = key; setupWorld(); }
 }
@@ -206,7 +206,7 @@ function depart() {
 }
 /* ---------- nhiệm vụ xe ưu tiên ---------- */
 const MISSION_TXT = {
-  fire: { start: '🔥 Có cháy! Giữ 💦 để phun nước, ◀ ▶ hoặc kéo ngón tay để ngắm', done: '💦 Bé dập tắt hết đám cháy! +3 ⭐', stars: 3 },
+  fire: { start: '🔥 Có cháy! ◀ ▶ để ngắm, bấm 💦 để phun, bấm 🛑 để dừng', done: '💦 Bé dập tắt hết đám cháy! +3 ⭐', stars: 3 },
   ambulance: { start: '🚑 Có người bị ốm bên đường! Bấm vào người bệnh để đón', btn: '🚑 Đón người bệnh', picked: '🚑 Đã đón người bệnh! Mình chở tới trạm sau nhé' },
   police: { start: '🚓 Có bé bị lạc đang khóc! Bấm vào bé để giúp', btn: '🚓 Giúp bé lạc', picked: '🚓 Đã đón bé lạc! Mình đưa bé tới trạm sau gặp bố mẹ nhé' }
 };
@@ -214,8 +214,9 @@ let missionCont = null;
 function mission(cont) {
   if (S.mode !== 'play') return;
   const type = S.veh, T = MISSION_TXT[type]; S.inMission = type; missionCont = cont;
+  W.setBoost(false); $('#speedfx').classList.add('hidden');
   sfx2.alarm(); W.setupMission(type); banner(T.start, 3600);
-  if (type === 'fire') { setSteer('fire'); setTimeout(() => { const m = W.mission(); if (S.inMission === 'fire' && m && m.left) banner(`🔥 Còn ${m.left} đám cháy`, 60000); }, 3700); }
+  if (type === 'fire') { setSteer('fire'); setSpray(false); setTimeout(() => { const m = W.mission(); if (S.inMission === 'fire' && m && m.left) banner(`🔥 Còn ${m.left} đám cháy`, 60000); }, 3700); }
   else { const b = $('#missionBtn'); b.textContent = T.btn; b.classList.remove('hidden'); }
 }
 function hideMissionBtn() { $('#missionBtn').classList.add('hidden'); }
@@ -240,40 +241,45 @@ function setSteer(mode) {
   $('#sprayBtn').classList.toggle('hidden', mode !== 'fire');
   if (mode !== 'fire') { setSpray(false); W.missionSteer(0); }
 }
-function setSpray(on) { W.spray(on); sndSpray(!!on && S.steer === 'fire'); $('#sprayBtn').classList.toggle('on', !!on && S.steer === 'fire'); }
+let spraying = false;
+function setSpray(on) {
+  spraying = !!on && S.steer === 'fire'; W.spray(spraying); sndSpray(spraying);
+  const b = $('#sprayBtn'); b.classList.toggle('on', spraying); b.classList.toggle('hint', !spraying && S.steer === 'fire');
+  b.innerHTML = spraying ? '<span>🛑</span><small>Dừng</small>' : '<span>💦</span><small>Phun</small>';
+}
+const toggleSpray = () => setSpray(!spraying);
 function steerBtn(el, dir) {
   el.addEventListener('pointerdown', e => { e.preventDefault(); if (S.steer === 'lanes') W.steer(dir); else if (S.steer === 'fire') W.missionSteer(dir); el.classList.add('on'); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, () => { el.classList.remove('on'); if (S.steer === 'fire') W.missionSteer(0); }));
 }
 steerBtn($('#stL'), -1); steerBtn($('#stR'), 1);
-$('#sprayBtn').addEventListener('pointerdown', e => { e.preventDefault(); setSpray(true); });
-['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('#sprayBtn').addEventListener(ev, () => setSpray(false)));
+// Bé tự bấm 💦 để phun, bấm 🛑 để dừng (bấm 1 lần, không cần giữ)
+$('#sprayBtn').addEventListener('pointerdown', e => { e.preventDefault(); sfx.tap(); toggleSpray(); });
 $('#missionBtn').onclick = () => { sfx.tap(); W.missionTap(0, 0, true); hideMissionBtn(); };
 {
   const cv = document.getElementById('c'); let p0 = null, drag = false;
   cv.addEventListener('pointerdown', e => {
     if (S.mode !== 'play') return;
-    if (S.steer === 'fire') { drag = true; cv.setPointerCapture(e.pointerId); W.missionAim(e.clientX, e.clientY); setSpray(true); return; }
+    if (S.steer === 'fire') { drag = true; cv.setPointerCapture(e.pointerId); W.missionAim(e.clientX, e.clientY); return; } // chạm/kéo chỉ để ngắm, không tự phun
     p0 = { x: e.clientX, y: e.clientY, t: performance.now() };
   });
   cv.addEventListener('pointermove', e => { if (drag && S.steer === 'fire') W.missionAim(e.clientX, e.clientY); });
   const up = e => {
-    if (drag) { drag = false; setSpray(false); return; }
+    if (drag) { drag = false; return; }
     if (!p0 || S.mode !== 'play') return; const dx = e.clientX - p0.x, dy = e.clientY - p0.y; p0 = null;
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && S.steer === 'lanes') { W.steer(dx > 0 ? 1 : -1); return; }
     if (Math.hypot(dx, dy) < 25) { if (W.tapAt(e.clientX, e.clientY) && S.inMission && S.inMission !== 'fire') hideMissionBtn(); }
   };
-  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', () => { if (drag) { drag = false; setSpray(false); } p0 = null; });
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', () => { drag = false; p0 = null; });
 }
 document.addEventListener('keydown', e => {
   if (S.mode !== 'play' || !S.steer) return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const d = e.key === 'ArrowLeft' ? -1 : 1; if (S.steer === 'lanes') { if (!e.repeat) W.steer(d); } else W.missionSteer(d); e.preventDefault(); }
-  if (e.key === ' ' && S.steer === 'fire') { setSpray(true); e.preventDefault(); }
+  if (e.key === ' ' && S.steer === 'fire') { if (!e.repeat) toggleSpray(); e.preventDefault(); }
 });
 document.addEventListener('keyup', e => {
   if (S.steer !== 'fire') return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') W.missionSteer(0);
-  if (e.key === ' ') setSpray(false);
 });
 /* ---------- câu thưởng ---------- */
 let bonusTimer = null;

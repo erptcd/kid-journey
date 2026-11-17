@@ -140,8 +140,11 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
 #steer>button{pointer-events:auto;touch-action:none;width:86px;height:86px;border-radius:50%;background:#ffffffe6;font-size:40px;font-weight:800;box-shadow:0 6px 0 #c9d4e6,0 8px 24px #0003;color:#1d4ed8}
 #steer>button.on{transform:translateY(4px);box-shadow:0 2px 0 #c9d4e6;background:#dbe8ff}
 #steer[data-mode=lanes]{justify-content:space-between;padding:0 6vw}
+#steer[data-mode=fire]{justify-content:flex-start;padding:0 5vw}#steer[data-mode=fire] #sprayBtn{order:3;margin-left:auto}
 #sprayBtn{width:112px!important;height:112px!important;font-size:54px!important;background:linear-gradient(180deg,#8fd3ff,#3a86ff)!important;box-shadow:0 6px 0 #1d5fc4,0 8px 24px #0003!important}
-#sprayBtn.on{animation:pulse 0.6s infinite;transform:translateY(4px)}
+#sprayBtn{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}#sprayBtn small{font-size:17px;color:#fff;font-weight:800;margin-top:2px}
+#sprayBtn.on{background:linear-gradient(180deg,#ff8a8a,#e63946)!important;box-shadow:0 6px 0 #a4161a,0 8px 24px #0003!important}
+#sprayBtn.hint{animation:pulse 1s infinite}
 #missionBtn{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:6;background:linear-gradient(180deg,#ffd23f,#ff9f1c);color:#22314f;font-size:26px;font-weight:800;padding:14px 34px;border-radius:999px;box-shadow:0 6px 0 #d47a00;animation:pulse 1.2s infinite}
 #praise{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-size:clamp(30px,6vw,54px);font-weight:800;color:#fff;text-shadow:0 4px 0 #ff7a3d,0 0 18px #0006;pointer-events:none;z-index:30;white-space:nowrap;animation:praise 1.3s ease-out forwards}
 @keyframes praise{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}25%{transform:translate(-50%,-50%) scale(1.15);opacity:1}80%{opacity:1}100%{transform:translate(-50%,-90%) scale(1);opacity:0}}
@@ -205,7 +208,7 @@ h1 small{display:block;font-size:.4em;color:var(--ink);text-shadow:none;font-wei
   <div class="qright" id="qPad"></div>
 </div>
 
-<div id="steer" class="hidden"><button id="stL" aria-label="Sang trái">◀</button><button id="sprayBtn" class="hidden" aria-label="Phun nước">💦</button><button id="stR" aria-label="Sang phải">▶</button></div>
+<div id="steer" class="hidden"><button id="stL" aria-label="Sang trái">◀</button><button id="sprayBtn" class="hidden" aria-label="Phun nước / dừng"><span>💦</span><small>Phun</small></button><button id="stR" aria-label="Sang phải">▶</button></div>
 <button id="missionBtn" class="hidden"></button>
 <div id="praise" class="hidden"></div>
 <div id="stampPop" class="hidden"></div>

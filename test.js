@@ -60,17 +60,25 @@ async function playUntil(page, cond, ms = 90000, solve = true) {
     await page.keyboard.up('ArrowLeft'); await sleep(300);
     const aim = await page.evaluate(() => __kj.W.mission().aimU);
     ok(aim < -6, 'ngắm bằng phím ← (aimU=' + aim.toFixed(1) + ')');
-    await page.keyboard.down(' ');
+    ok(await page.evaluate(() => !__kj.W.mission().spray), 'chưa bấm thì xe KHÔNG tự phun');
+    await page.keyboard.press(' ');
     for (let t = 0; t < 80 && await page.evaluate(() => __kj.W.mission().levels[0] > 0.6); t++) await sleep(100);
     await page.screenshot({ path: 'test-fire.png' });
-    await page.keyboard.up(' ');
+    await page.keyboard.press(' '); await sleep(200);
+    ok(await page.evaluate(() => !__kj.W.mission().spray), 'bấm Space lần nữa → dừng phun');
     await page.setViewportSize({ width: 390, height: 844 }); await sleep(1200); await page.screenshot({ path: 'test-fire-port.png' }); await page.setViewportSize({ width: 1280, height: 760 }); await sleep(500);
     const lv = await page.evaluate(() => __kj.W.mission().levels);
     ok(lv[0] < 1 && lv[2] === 1, 'phun trúng đám trái thì lửa giảm, đám phải còn nguyên ' + JSON.stringify(lv));
     // kéo ngón tay ở giữa màn hình → ngắm đám giữa
     await page.mouse.move(640, 300); await page.mouse.down(); await page.mouse.move(645, 300); await sleep(300);
     const sp = await page.evaluate(() => __kj.W.mission().spray); await page.mouse.up();
-    ok(sp, 'giữ ngón tay trên màn hình → phun');
+    ok(!sp, 'chạm/kéo trên màn hình chỉ ngắm, không tự phun');
+    await page.click('#sprayBtn'); await sleep(200);
+    const on = await page.evaluate(() => [__kj.W.mission().spray, document.querySelector('#sprayBtn').textContent]);
+    await sleep(1500); const still = await page.evaluate(() => __kj.W.mission().spray);
+    await page.click('#sprayBtn'); await sleep(200);
+    const off = await page.evaluate(() => [__kj.W.mission().spray, document.querySelector('#sprayBtn').textContent]);
+    ok(on[0] && still && !off[0], `bấm 💦 → phun liên tục (${on[1]}), bấm 🛑 → dừng (${off[1]})`);
     await page.evaluate(() => __kj.W.missionTap(0, 0, true));
     ok(await playUntil(page, "!K.S.inMission && K.S.mStars === 3", 20000, false), 'dập hết lửa → +3 sao');
     ok(await playUntil(page, "K.S.mode === 'finish'"), 'về đích');
@@ -82,7 +90,7 @@ async function playUntil(page, cond, ms = 90000, solve = true) {
 
   console.log('2) Ô tô: đổi làn, nhặt sao');
   {
-    const { page, errs } = await open(browser, { ...base, veh: 'car' });
+    const { page, errs } = await open(browser, { ...base, veh: 'car', slots: 1 });
     await page.evaluate(() => __kj.start());
     ok(await playUntil(page, "K.S.steer === 'lanes' && K.W.speed() > 3"), 'xe chạy, hiện ◀ ▶');
     const l = await page.evaluate(() => { const a = __kj.W.steer(1); return [a, __kj.W.lane()]; });
@@ -114,7 +122,7 @@ async function playUntil(page, cond, ms = 90000, solve = true) {
 
   console.log('4) Tàu hoả: chạm nhặt sao, ôn xen câu sai');
   {
-    const { page, errs } = await open(browser, { ...base, veh: 'train', reviewOn: true, review: [{ key: 'x', q: { subj: 'math', id: 'c2_add', topic: 'C2 · Ôn', input: 'number', prompt: '7 + 5 = ?', answer: '12', big: true, sayLang: 'vi-VN' }, wrong: 1, ok: 0, t: 1 }] });
+    const { page, errs } = await open(browser, { ...base, veh: 'train', slots: 1, reviewOn: true, review: [{ key: 'x', q: { subj: 'math', id: 'c2_add', topic: 'C2 · Ôn', input: 'number', prompt: '7 + 5 = ?', answer: '12', big: true, sayLang: 'vi-VN' }, wrong: 1, ok: 0, t: 1 }] });
     await page.evaluate(() => __kj.start());
     ok(await playUntil(page, "K.S.mode === 'play' && K.W.speed() > 5"), 'tàu chạy');
     // thử chạm khắp màn hình để nhặt sao

@@ -388,9 +388,9 @@ function camTarget(dt) {
   const pos = new V3(), look = new V3();
   if (R.camMode === 'mission' && R.mission) {
     const m = R.mission, c = P(m.s), tm = T(m.s), sm = S(m.s), port = innerWidth / innerHeight < 0.8, fire = m.type === 'fire';
-    const back = fire ? (port ? 36 : 20) : (port ? 24 : 17), hh = fire ? (port ? 16 : 10) : (port ? 14 : 10);
+    const back = fire ? (port ? 34 : 19) : (port ? 24 : 17), hh = fire ? (port ? 22 : 15) : (port ? 14 : 10);
     pos.copy(c).addScaledVector(sm, -back).addScaledVector(tm, fire ? -2 : 2).add(new V3(0, hh, 0));
-    look.copy(c).addScaledVector(sm, fire ? 7 : 4).addScaledVector(tm, fire ? 0 : 2.5).add(new V3(0, 1.5, 0));
+    look.copy(c).addScaledVector(sm, fire ? 8 : 4).addScaledVector(tm, fire ? 0 : 2.5).add(new V3(0, 1.5, 0));
     return { pos, look, k: 2 };
   }
   if (R.camMode === 'board') {
@@ -633,7 +633,10 @@ W.missionTap = function (x, y, force) {
   }
   return true;
 };
-const DROP_G = new THREE.SphereGeometry(0.22, 6, 5), DROP_M = new THREE.MeshBasicMaterial({ color: 0x8fd3ff, transparent: true, opacity: 0.85, depthWrite: false });
+const DROP_G = new THREE.SphereGeometry(0.3, 7, 5), DROP_M = new THREE.MeshBasicMaterial({ color: 0x2f9bff, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
+const SPLASH_M = new THREE.MeshBasicMaterial({ color: 0xe3f4ff, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
+const JET_N = 46, JET_G = new THREE.SphereGeometry(0.42, 8, 6), JET_M = new THREE.MeshBasicMaterial({ color: 0x4fb3ff, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
+JET_G.userData.shared = true;
 DROP_G.userData.shared = true;
 const SMOKE_M = () => new THREE.MeshStandardMaterial({ color: 0x8d8f94, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1 });
 function updateMission(dt, time) {
@@ -648,26 +651,42 @@ function updateMission(dt, time) {
   m.ret.userData.arrow.position.y = 2.6 + Math.sin(time * 6) * 0.25; m.ret.userData.ring.material.color.setHex(m.spray ? 0x4cc9f0 : 0xffd23f);
   // phun nước: hạt bay cung parabol từ vòi tới điểm ngắm
   const truck = R.veh.parts[0]; truck.updateMatrixWorld();
+  // tia nước liền (luôn vẽ đè lên xe để bé thấy rõ)
+  if (!m.jet) { m.jet = new THREE.InstancedMesh(JET_G, JET_M, JET_N); m.jet.renderOrder = 20; m.jet.frustumCulled = false; m.jet.visible = false; m.g.add(m.jet); m.jetD = new THREE.Object3D(); }
+  m.jetL = Math.max(0, Math.min(1, (m.jetL || 0) + (m.spray && !m.done ? dt / 0.35 : -dt / 0.25)));
+  m.jet.visible = m.jetL > 0.01;
+  if (m.jet.visible) {
+    const noz = new V3(0, 3.95, 1.3).applyMatrix4(truck.matrixWorld), Tt = 1.0, G = 16, vel = A.clone().sub(noz).divideScalar(Tt); vel.y += 0.5 * G * Tt;
+    const tail = m.spray ? 0 : 1 - m.jetL, head = m.spray ? m.jetL : 1;
+    for (let i = 0; i < JET_N; i++) {
+      const u = i / (JET_N - 1), on = u <= head && u >= tail, t = u * Tt, w = Math.sin(time * 30 + i * 0.9) * 0.08;
+      m.jetD.position.set(noz.x + vel.x * t + w, noz.y + vel.y * t - 0.5 * G * t * t, noz.z + vel.z * t - w);
+      m.jetD.scale.setScalar(on ? 0.7 + u * 0.9 : 0.0001); m.jetD.updateMatrix(); m.jet.setMatrixAt(i, m.jetD.matrix);
+    }
+    m.jet.instanceMatrix.needsUpdate = true;
+  }
   if (m.spray && !m.done) {
     m.sprayT += dt;
-    const noz = new V3(0, 3.75, 1.0).applyMatrix4(truck.matrixWorld), G = 18;
-    m.acc = (m.acc || 0) + dt * 130; const nNew = Math.floor(m.acc); m.acc -= nNew;
+    const noz = new V3(0, 3.95, 1.3).applyMatrix4(truck.matrixWorld), G = 18;
+    // bọt nước bắn lên ở chỗ nước rơi xuống
+    if (m.sprayT > 0.35) { m.sacc = (m.sacc || 0) + dt * 70; const ns = Math.floor(m.sacc); m.sacc -= ns; for (let k = 0; k < ns && m.drops.length < 420; k++) { const p0 = A.clone().add(new V3((Math.random() - 0.5) * 1.2, 0.3, (Math.random() - 0.5) * 1.2)), Tt = 0.45 + Math.random() * 0.25, v = new V3((Math.random() - 0.5) * 7, 0, (Math.random() - 0.5) * 7); v.y = 0.5 * G * Tt; const d = new THREE.Mesh(DROP_G, SPLASH_M); d.renderOrder = 21; d.position.copy(p0); d.scale.setScalar(0.6); m.g.add(d); m.drops.push({ m: d, p0, v, t: 0, T: Tt, G, sp: true }); } }
+    m.acc = (m.acc || 0) + dt * 90; const nNew = Math.floor(m.acc); m.acc -= nNew;
     for (let k = 0; k < nNew && m.drops.length < 320; k++) {
-      const tgt = A.clone().add(new V3((Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6)), Tt = 0.75 + Math.random() * 0.1;
+      const tgt = A.clone().add(new V3((Math.random() - 0.5) * 2.2, 0, (Math.random() - 0.5) * 2.2)), Tt = 0.9 + Math.random() * 0.2;
       const vel = tgt.clone().sub(noz).divideScalar(Tt); vel.y += 0.5 * G * Tt;
-      const d = new THREE.Mesh(DROP_G, DROP_M); d.position.copy(noz); m.g.add(d); m.drops.push({ m: d, p0: noz.clone(), v: vel, t: (k / Math.max(1, nNew)) * dt, T: Tt, G });
+      const d = new THREE.Mesh(DROP_G, DROP_M); d.renderOrder = 21; d.position.copy(noz); m.g.add(d); m.drops.push({ m: d, p0: noz.clone(), v: vel, t: (k / Math.max(1, nNew)) * dt, T: Tt, G });
     }
   }
   for (let i = m.drops.length - 1; i >= 0; i--) {
     const d = m.drops[i]; d.t += dt; const t = Math.max(0, d.t);
     d.m.position.set(d.p0.x + d.v.x * t, d.p0.y + d.v.y * t - 0.5 * d.G * t * t, d.p0.z + d.v.z * t);
-    d.m.scale.setScalar(1 + t * 1.2);
+    d.m.scale.setScalar(d.sp ? 0.6 * (1 - t / d.T * 0.5) : 0.8 + t * 0.8);
     if (d.t >= d.T) { m.g.remove(d.m); m.drops.splice(i, 1); }
   }
   // lửa giảm khi ngắm trúng
   let left = 0;
   m.fires.forEach(f => {
-    if (!f.out && m.spray && m.sprayT > 0.5 && Math.abs(m.aimU - f.du) < 4.0) f.level = Math.max(0, f.level - dt / 3.4);
+    if (!f.out && m.spray && m.sprayT > 0.35 && Math.abs(m.aimU - f.du) < 4.0) f.level = Math.max(0, f.level - dt / 3.4);
     if (!f.out && f.level <= 0) { f.out = true; f.fl.visible = false; f.smokeT = 4; f.hut.children[0].material = mat(0x8d8478); emit('fireLeft', { n: m.fires.filter(x => !x.out).length }); }
     if (!f.out) { left++; const k = 0.25 + 0.85 * f.level; f.fl.userData.L.forEach(fl => { const u = fl.userData; fl.scale.set(k * u.k, k * u.k * (0.8 + 0.35 * Math.sin(time * 11 + u.ph)), k * u.k); }); }
     if (f.smokeT > 0 || (!f.out && f.level < 0.95 && m.spray)) {
